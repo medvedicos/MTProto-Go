@@ -409,7 +409,7 @@ step_users() {
         USERS+=("${U_NAME}:${U_SECRET}")
 
         ask_yn "Добавить ещё одного пользователя?" "n" ADD_MORE
-        [[ "$ADD_MORE" == "false" ]] && break
+        if [[ "$ADD_MORE" == "false" ]]; then break; fi
     done
 }
 
@@ -664,7 +664,7 @@ review() {
     echo ""
     hr
     ask_yn "Начать установку?" "y" CONFIRMED
-    [[ "$CONFIRMED" == "false" ]] && die "Установка отменена."
+    if [[ "$CONFIRMED" == "false" ]]; then die "Установка отменена."; fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -872,7 +872,7 @@ install_binary() {
     tar -xzf "${tmpdir}/${asset}" -C "${tmpdir}/"
     local extracted_bin
     extracted_bin="$(find "${tmpdir}" -type f -name "${BINARY_NAME}" | head -1)"
-    [[ -z "$extracted_bin" ]] && die "Бинарный файл не найден в архиве"
+    if [[ -z "$extracted_bin" ]]; then die "Бинарный файл не найден в архиве"; fi
 
     install -Dm755 "$extracted_bin" "${INSTALL_DIR}/${BINARY_NAME}"
     ok "Установлен: ${INSTALL_DIR}/${BINARY_NAME}"
