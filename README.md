@@ -4,36 +4,26 @@
 
 ---
 
-## Возможности
+## Установка — одна команда
 
-- Пошаговый wizard с настройкой всех параметров прокси
-- Установка бинарника **или** развёртывание через **Docker / docker-compose**
-- Автоопределение архитектуры (x86\_64 / aarch64) и libc (gnu / musl)
-- Настройка системного сервиса (**systemd** / **OpenRC**)
-- Генерация готового `config.toml` с комментариями
-- Автопечать ссылок `tg://` для Telegram-клиентов
-- Поддержка Uninstall и Purge
-
----
-
-## Быстрый старт
+Вставьте в консоль VPS (под root):
 
 ```bash
-# Скачать установщик
-curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh -o install_telemt.sh
-
-# Дать права на выполнение
-chmod +x install_telemt.sh
-
-# Запустить от root
-sudo ./install_telemt.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)
 ```
 
-> **Требования:** Linux x86\_64 или aarch64, root-доступ, `curl` или `wget`.
+Если вы не root:
+
+```bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)
+```
+
+> **Почему `bash <(...)` а не `curl | bash`?**
+> Установщик интерактивный — задаёт вопросы. При `curl | bash` stdin занят пайпом и `read` не работает. Process substitution `<(...)` сохраняет stdin как терминал.
 
 ---
 
-## Шаги установки
+## Что настраивается (пошаговый wizard)
 
 | # | Шаг | Описание |
 |---|-----|----------|
@@ -70,20 +60,9 @@ tg://proxy?server=YOUR_IP&port=443&secret=ee<32_hex_chars>
 
 ---
 
-## Анти-цензура
-
-Telemt маскирует трафик под HTTPS, отвечая как настоящий HTTPS-сервер на неизвестные подключения. Настраивается:
-
-- **TLS domain** — домен для SNI-маскировки (по умолчанию: `petrovich.ru`)
-- **Masking** — проксирование неизвестного трафика на реальный сервер
-- **TLS emulation** — точное воспроизведение поведения TLS-сервера
-- **unknown\_sni\_action** — `drop` или `mask`
-
----
-
 ## Docker
 
-Скрипт генерирует готовый `docker-compose.yml` с hardened-настройками:
+При выборе Docker-установки скрипт генерирует `docker-compose.yml` с hardened-настройками:
 
 ```yaml
 services:
@@ -105,72 +84,25 @@ services:
         hard: 65536
 ```
 
-```bash
-cd /opt/telemt
-docker compose up -d
-docker compose logs -f
-```
-
 ---
 
 ## Управление сервисом
 
 ```bash
-# Статус
-systemctl status telemt
-
-# Логи (live)
-journalctl -u telemt -f
-
-# Перезапуск
-systemctl restart telemt
-
-# Остановка
-systemctl stop telemt
+systemctl status telemt      # статус
+journalctl -u telemt -f      # логи live
+systemctl restart telemt     # перезапуск
+systemctl stop telemt        # остановка
 ```
 
 ---
 
 ## Удаление
 
-Повторно запустите скрипт и выберите:
+Запустите установщик повторно и выберите:
 
 - **Uninstall** — удаляет бинарник и сервис, оставляет конфиг и данные
-- **Purge** — полное удаление: бинарник, сервис, конфиг, данные, пользователь системы
-
----
-
-## Конфигурация
-
-После установки конфиг находится в `/etc/telemt/telemt.toml`.
-
-Пример минимальной конфигурации:
-
-```toml
-show_link = "*"
-
-[general]
-use_middle_proxy = true
-log_level = "normal"
-
-[general.modes]
-tls     = true
-secure  = false
-classic = false
-
-[server]
-port = 443
-
-[censorship]
-tls_domain = "petrovich.ru"
-mask       = true
-
-[[access.user]]
-name   = "myuser"
-secret = "0123456789abcdef0123456789abcdef"
-```
-
-Полная документация по параметрам: [CONFIG_PARAMS.en.md](https://github.com/telemt/telemt/blob/main/docs/CONFIG_PARAMS.en.md)
+- **Purge** — полное удаление: бинарник, сервис, конфиг, данные, системный пользователь
 
 ---
 

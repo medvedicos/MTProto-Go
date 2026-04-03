@@ -3,11 +3,25 @@
 #  Telemt MTProto Proxy — Interactive VPS Installer
 #  https://github.com/telemt/telemt
 #
-#  Usage:
-#    chmod +x install_telemt.sh
-#    sudo ./install_telemt.sh
+#  One-liner (paste into VPS console):
+#    bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)
+#
+#  If not root:
+#    sudo bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)
 # =============================================================================
 set -euo pipefail
+
+# Guard: curl | bash breaks interactive read — detect and abort
+if [ ! -t 0 ]; then
+    echo ""
+    echo "ERROR: This script is interactive and cannot run via pipe (curl ... | bash)."
+    echo ""
+    echo "Use this command instead:"
+    echo ""
+    echo "  bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)"
+    echo ""
+    exit 1
+fi
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CONSTANTS
