@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Telemt MTProto Proxy — Interactive VPS Installer
+#  Telemt MTProto Прокси — Интерактивный установщик для VPS
 #  https://github.com/telemt/telemt
 #
-#  One-liner (paste into VPS console):
+#  Одна команда (вставить в консоль VPS):
 #    bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)
 #
-#  If not root:
+#  Если не root:
 #    sudo bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)
 # =============================================================================
 set -euo pipefail
 
-# Guard: curl | bash breaks interactive read — detect and abort
+# Защита: curl | bash ломает интерактивный ввод — определяем и прерываем
 if [ ! -t 0 ]; then
     echo ""
-    echo "ERROR: This script is interactive and cannot run via pipe (curl ... | bash)."
+    echo "ОШИБКА: Этот скрипт интерактивный и не может работать через пайп (curl ... | bash)."
     echo ""
-    echo "Use this command instead:"
+    echo "Используйте вместо этого:"
     echo ""
     echo "  bash <(curl -fsSL https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/install_telemt.sh)"
     echo ""
@@ -24,7 +24,7 @@ if [ ! -t 0 ]; then
 fi
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CONSTANTS
+# КОНСТАНТЫ
 # ──────────────────────────────────────────────────────────────────────────────
 REPO="telemt/telemt"
 BINARY_NAME="telemt"
@@ -48,12 +48,12 @@ RST='\033[0m'
 BOLD='\033[1m'
 
 # ──────────────────────────────────────────────────────────────────────────────
-# HELPERS
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ──────────────────────────────────────────────────────────────────────────────
 banner() {
     echo ""
     echo -e "${CYN}${BOLD}╔══════════════════════════════════════════════════════════╗${RST}"
-    echo -e "${CYN}${BOLD}║        Telemt MTProto Proxy — Interactive Installer       ║${RST}"
+    echo -e "${CYN}${BOLD}║       Telemt MTProto Прокси — Установщик для VPS         ║${RST}"
     echo -e "${CYN}${BOLD}║              https://github.com/telemt/telemt              ║${RST}"
     echo -e "${CYN}${BOLD}╚══════════════════════════════════════════════════════════╝${RST}"
     echo ""
@@ -68,7 +68,7 @@ die()  { err "$*"; exit 1; }
 
 hr() { echo -e "${DIM}──────────────────────────────────────────────────────────${RST}"; }
 
-# Prompt with default value
+# Запрос с значением по умолчанию
 ask() {
     local prompt="$1"
     local default="${2:-}"
@@ -85,26 +85,26 @@ ask() {
     printf -v "$var_name" '%s' "$answer"
 }
 
-# Yes/No prompt
+# Запрос Да/Нет
 ask_yn() {
     local prompt="$1"
-    local default="${2:-y}"  # y or n
+    local default="${2:-y}"
     local var_name="$3"
     local answer
     local hint
-    if [[ "$default" == "y" ]]; then hint="Y/n"; else hint="y/N"; fi
+    if [[ "$default" == "y" ]]; then hint="Д/н"; else hint="д/Н"; fi
 
     echo -ne "  ${WHT}${prompt}${RST} ${DIM}[${hint}]${RST}: "
     read -r answer
     answer="${answer:-$default}"
     case "$answer" in
-        [Yy]*) printf -v "$var_name" 'true'  ;;
-        [Nn]*) printf -v "$var_name" 'false' ;;
-        *)     printf -v "$var_name" 'true'  ;;
+        [ДдYy]*) printf -v "$var_name" 'true'  ;;
+        [НнNn]*) printf -v "$var_name" 'false' ;;
+        *)       printf -v "$var_name" 'true'  ;;
     esac
 }
 
-# Menu selection
+# Выбор из меню
 menu() {
     local prompt="$1"
     shift
@@ -115,43 +115,43 @@ menu() {
         echo -e "    ${CYN}$((i+1))${RST}) ${options[$i]}"
     done
     while true; do
-        echo -ne "  Enter number: "
+        echo -ne "  Введите номер: "
         read -r answer
         if [[ "$answer" =~ ^[0-9]+$ ]] && (( answer >= 1 && answer <= ${#options[@]} )); then
             MENU_RESULT="${options[$((answer-1))]}"
             MENU_IDX=$((answer-1))
             return 0
         fi
-        warn "Invalid choice. Enter 1-${#options[@]}"
+        warn "Неверный выбор. Введите число от 1 до ${#options[@]}"
     done
 }
 
-# Generate random hex secret
+# Генерация случайного hex-секрета
 gen_secret() {
     if command -v openssl &>/dev/null; then
         openssl rand -hex 16
     elif [[ -r /dev/urandom ]]; then
         head -c 16 /dev/urandom | xxd -p | tr -d '\n'
     else
-        die "Cannot generate random secret: openssl or /dev/urandom required"
+        die "Невозможно сгенерировать секрет: требуется openssl или /dev/urandom"
     fi
 }
 
-# Validate hex string
+# Проверка hex-строки
 is_hex32() { [[ "$1" =~ ^[0-9a-fA-F]{32}$ ]]; }
 
-# Detect architecture
+# Определение архитектуры
 detect_arch() {
     local machine
     machine="$(uname -m)"
     case "$machine" in
-        x86_64)  ARCH="x86_64" ;;
+        x86_64)        ARCH="x86_64" ;;
         aarch64|arm64) ARCH="aarch64" ;;
-        *) die "Unsupported architecture: $machine" ;;
+        *) die "Неподдерживаемая архитектура: $machine" ;;
     esac
 }
 
-# Detect libc
+# Определение libc
 detect_libc() {
     if ldd --version 2>&1 | grep -qi musl; then
         LIBC="musl"
@@ -164,7 +164,7 @@ detect_libc() {
     fi
 }
 
-# Detect service manager
+# Определение менеджера служб
 detect_service_manager() {
     if command -v systemctl &>/dev/null && systemctl --version &>/dev/null 2>&1; then
         SVC_MGR="systemd"
@@ -175,7 +175,7 @@ detect_service_manager() {
     fi
 }
 
-# Get latest release tag from GitHub
+# Получение последней версии с GitHub
 get_latest_version() {
     local url="https://api.github.com/repos/${REPO}/releases/latest"
     if command -v curl &>/dev/null; then
@@ -183,11 +183,11 @@ get_latest_version() {
     elif command -v wget &>/dev/null; then
         wget -qO- "$url" | grep '"tag_name"' | cut -d'"' -f4
     else
-        die "curl or wget is required"
+        die "Требуется curl или wget"
     fi
 }
 
-# Download file
+# Загрузка файла
 download() {
     local url="$1"
     local dest="$2"
@@ -196,47 +196,47 @@ download() {
     elif command -v wget &>/dev/null; then
         wget -qO "$dest" "$url"
     else
-        die "curl or wget is required"
+        die "Требуется curl или wget"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PREFLIGHT CHECKS
+# ПРЕДВАРИТЕЛЬНЫЕ ПРОВЕРКИ
 # ──────────────────────────────────────────────────────────────────────────────
 preflight() {
-    step "Checking system requirements"
+    step "Проверка системных требований"
 
     if [[ $EUID -ne 0 ]]; then
-        die "This script must be run as root (or with sudo)"
+        die "Скрипт должен быть запущен от имени root (или через sudo)"
     fi
 
     for cmd in grep sed awk cut tr head; do
-        command -v "$cmd" &>/dev/null || die "Required command not found: $cmd"
+        command -v "$cmd" &>/dev/null || die "Не найдена необходимая команда: $cmd"
     done
-    ok "Running as root"
+    ok "Запущен от root"
 
     detect_arch
-    ok "Architecture: ${ARCH}"
+    ok "Архитектура: ${ARCH}"
 
     detect_libc
-    ok "C library: ${LIBC}"
+    ok "Библиотека C: ${LIBC}"
 
     detect_service_manager
-    ok "Service manager: ${SVC_MGR}"
+    ok "Менеджер служб: ${SVC_MGR}"
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 1 — INSTALLATION METHOD & VERSION
+# ШАГ 1 — МЕТОД УСТАНОВКИ
 # ──────────────────────────────────────────────────────────────────────────────
 step_method() {
-    step "Installation method"
+    step "Метод установки"
     hr
 
-    menu "How would you like to install Telemt?" \
-        "Binary (download pre-built release) [recommended]" \
+    menu "Как установить Telemt?" \
+        "Бинарник (скачать готовый релиз) [рекомендуется]" \
         "Docker / docker-compose" \
-        "Uninstall existing installation" \
-        "Purge (uninstall + remove all data & config)"
+        "Удалить существующую установку" \
+        "Полное удаление (включая данные и конфиг)"
 
     INSTALL_METHOD="$MENU_IDX"
 
@@ -254,96 +254,97 @@ step_method() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 2 — VERSION SELECTION
+# ШАГ 2 — ВЫБОР ВЕРСИИ
 # ──────────────────────────────────────────────────────────────────────────────
 step_version() {
-    step "Version selection"
+    step "Выбор версии"
     hr
 
-    info "Fetching latest release version..."
+    info "Получаем информацию о последней версии..."
     LATEST_VER="$(get_latest_version || echo '')"
     if [[ -z "$LATEST_VER" ]]; then
-        warn "Could not fetch latest version from GitHub"
+        warn "Не удалось получить версию с GitHub"
         LATEST_VER="latest"
     else
-        ok "Latest release: ${LATEST_VER}"
+        ok "Последняя версия: ${LATEST_VER}"
     fi
 
-    ask "Version to install (leave empty for latest)" "$LATEST_VER" SELECTED_VERSION
+    ask "Версия для установки (оставьте пустым для последней)" "$LATEST_VER" SELECTED_VERSION
     SELECTED_VERSION="${SELECTED_VERSION:-latest}"
 
-    # Validate version format
     if [[ "$SELECTED_VERSION" != "latest" ]] && ! [[ "$SELECTED_VERSION" =~ ^v?[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-        die "Invalid version format: ${SELECTED_VERSION}"
+        die "Неверный формат версии: ${SELECTED_VERSION}"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 3 — SERVER PORT & NETWORK
+# ШАГ 3 — СЕРВЕР И СЕТЬ
 # ──────────────────────────────────────────────────────────────────────────────
 step_server() {
-    step "Server & Network configuration"
+    step "Настройка сервера и сети"
     hr
 
-    ask "Server listen port" "443" SERVER_PORT
+    ask "Порт сервера" "443" SERVER_PORT
     [[ "$SERVER_PORT" =~ ^[0-9]+$ ]] && (( SERVER_PORT >= 1 && SERVER_PORT <= 65535 )) \
-        || die "Invalid port: ${SERVER_PORT}"
+        || die "Неверный порт: ${SERVER_PORT}"
 
-    ask "Bind IPv4 address (0.0.0.0 = all interfaces)" "0.0.0.0" LISTEN_IPV4
+    ask "IPv4-адрес для прослушивания (0.0.0.0 = все интерфейсы)" "0.0.0.0" LISTEN_IPV4
 
-    ask_yn "Enable IPv6 support?" "n" ENABLE_IPV6
+    ask_yn "Включить поддержку IPv6?" "n" ENABLE_IPV6
     if [[ "$ENABLE_IPV6" == "true" ]]; then
-        ask "Bind IPv6 address (:: = all interfaces)" "::" LISTEN_IPV6
+        ask "IPv6-адрес для прослушивания (:: = все интерфейсы)" "::" LISTEN_IPV6
     else
         LISTEN_IPV6="::"
     fi
 
-    ask "Maximum concurrent connections (0 = unlimited)" "10000" MAX_CONNECTIONS
+    ask "Максимум одновременных подключений (0 = без ограничений)" "10000" MAX_CONNECTIONS
 
-    ask_yn "Enable PROXY protocol (for HAProxy / Nginx reverse proxy)?" "n" PROXY_PROTOCOL
+    ask_yn "Включить PROXY protocol (для HAProxy / Nginx)?" "n" PROXY_PROTOCOL
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 4 — PROXY MODES
+# ШАГ 4 — РЕЖИМЫ ПРОКСИ
 # ──────────────────────────────────────────────────────────────────────────────
 step_modes() {
-    step "Proxy modes"
+    step "Режимы прокси"
     hr
-    info "You can enable one or more modes simultaneously."
-    info "TLS mode is recommended for censorship bypass."
+    info "Можно включить несколько режимов одновременно."
+    info "Режим TLS рекомендуется для обхода блокировок."
 
-    ask_yn "Enable TLS mode (recommended, anti-censorship)" "y" MODE_TLS
-    ask_yn "Enable Secure mode" "n" MODE_SECURE
-    ask_yn "Enable Classic mode (legacy MTProxy compatibility)" "n" MODE_CLASSIC
+    ask_yn "Включить TLS-режим (рекомендуется, обход блокировок)?" "y" MODE_TLS
+    ask_yn "Включить Secure-режим?" "n" MODE_SECURE
+    ask_yn "Включить Classic-режим (совместимость со старым MTProxy)?" "n" MODE_CLASSIC
 
     if [[ "$MODE_TLS" == "false" && "$MODE_SECURE" == "false" && "$MODE_CLASSIC" == "false" ]]; then
-        warn "No modes enabled — defaulting to TLS mode"
+        warn "Ни один режим не выбран — включается TLS по умолчанию"
         MODE_TLS="true"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 5 — ANTI-CENSORSHIP (TLS MASKING)
+# ШАГ 5 — АНТИЦЕНЗУРА (TLS-МАСКИРОВКА)
 # ──────────────────────────────────────────────────────────────────────────────
 step_censorship() {
-    step "Anti-censorship / TLS masking"
+    step "Антицензура / TLS-маскировка"
     hr
-    info "TLS masking makes the proxy look like regular HTTPS traffic."
-    info "The TLS domain is used as the SNI hostname for camouflage."
+    info "TLS-маскировка делает прокси неотличимым от обычного HTTPS-трафика."
+    info "TLS-домен используется как SNI-имя хоста для камуфляжа."
 
-    ask "TLS masking domain (any valid HTTPS domain)" "petrovich.ru" TLS_DOMAIN
+    ask "Домен для TLS-маскировки (любой рабочий HTTPS-сайт)" "petrovich.ru" TLS_DOMAIN
 
-    ask_yn "Enable masking (forward unknown TLS connections to real server)?" "y" MASK_ENABLED
-    ask_yn "Enable TLS emulation (mimic real TLS server behaviour)?" "y" TLS_EMULATION
+    ask_yn "Включить маскировку (проксировать неизвестный TLS на реальный сервер)?" "y" MASK_ENABLED
+    ask_yn "Включить эмуляцию TLS (имитировать поведение настоящего TLS-сервера)?" "y" TLS_EMULATION
 
     if [[ "$MASK_ENABLED" == "true" ]]; then
-        info "Mask host defaults to TLS domain if left empty"
-        ask "Mask host override (leave empty = same as TLS domain)" "" MASK_HOST
+        info "Хост маскировки по умолчанию совпадает с TLS-доменом"
+        ask "Переопределить хост маскировки (оставьте пустым = TLS-домен)" "" MASK_HOST
     fi
 
     info ""
-    info "unknown_sni_action controls what happens when an unknown SNI arrives:"
-    menu "Unknown SNI action:" "drop (close connection)" "mask (forward to real server)"
+    info "Действие при получении неизвестного SNI:"
+    menu "Что делать с неизвестным SNI:" \
+        "drop — закрыть соединение" \
+        "mask — перенаправить на реальный сервер"
     case "$MENU_IDX" in
         0) UNKNOWN_SNI="drop" ;;
         1) UNKNOWN_SNI="mask" ;;
@@ -351,24 +352,24 @@ step_censorship() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 6 — MIDDLE PROXY (ME TRANSPORT)
+# ШАГ 6 — MIDDLE-END (ME) ТРАНСПОРТ
 # ──────────────────────────────────────────────────────────────────────────────
 step_middle_proxy() {
-    step "Middle-End (ME) transport"
+    step "Middle-End (ME) транспорт"
     hr
-    info "Middle proxy enables full MTProto over the official Telegram relay network."
-    info "Disable only if you need direct-DC mode."
+    info "Middle proxy обеспечивает полный MTProto через официальную сеть ретрансляторов Telegram."
+    info "Отключайте только если нужен режим прямого подключения к DC."
 
-    ask_yn "Enable middle proxy (ME transport)?" "y" USE_MIDDLE_PROXY
+    ask_yn "Включить middle proxy (ME-транспорт)?" "y" USE_MIDDLE_PROXY
 
     if [[ "$USE_MIDDLE_PROXY" == "true" ]]; then
-        ask_yn "Enable fast mode (optimized throughput)?" "n" FAST_MODE
-        ask_yn "Prefer IPv6 for upstream connections?" "n" PREFER_IPV6
+        ask_yn "Включить fast mode (оптимизация пропускной способности)?" "n" FAST_MODE
+        ask_yn "Предпочитать IPv6 для исходящих подключений?" "n" PREFER_IPV6
 
         info ""
-        info "Pool size controls how many ME writer connections are maintained."
-        ask "ME writer pool size" "8" ME_POOL_SIZE
-        ask "ME warm standby connections" "16" ME_WARM_STANDBY
+        info "Размер пула определяет количество активных ME-соединений."
+        ask "Размер пула ME writer" "8" ME_POOL_SIZE
+        ask "Количество тёплых резервных соединений ME" "16" ME_WARM_STANDBY
     else
         FAST_MODE="false"
         PREFER_IPV6="false"
@@ -378,69 +379,68 @@ step_middle_proxy() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 7 — USERS & SECRETS
+# ШАГ 7 — ПОЛЬЗОВАТЕЛИ И СЕКРЕТЫ
 # ──────────────────────────────────────────────────────────────────────────────
 step_users() {
-    step "User access configuration"
+    step "Настройка пользователей"
     hr
-    info "Each user gets a unique 32-character hex secret."
-    info "Users connect with: tg://proxy?server=HOST&port=PORT&secret=SECRET"
+    info "Каждый пользователь получает уникальный 32-символьный hex-секрет."
+    info "Подключение: tg://proxy?server=ХОСТ&port=ПОРТ&secret=СЕКРЕТ"
 
     USERS=()
 
     while true; do
         echo ""
         DEFAULT_NAME="user$((${#USERS[@]} + 1))"
-        ask "Username" "$DEFAULT_NAME" U_NAME
+        ask "Имя пользователя" "$DEFAULT_NAME" U_NAME
 
-        ask_yn "Auto-generate secret for '${U_NAME}'?" "y" AUTO_SECRET
+        ask_yn "Сгенерировать секрет автоматически для '${U_NAME}'?" "y" AUTO_SECRET
         if [[ "$AUTO_SECRET" == "true" ]]; then
             U_SECRET="$(gen_secret)"
-            ok "Generated secret: ${U_SECRET}"
+            ok "Сгенерирован секрет: ${U_SECRET}"
         else
             while true; do
-                ask "Secret (32 hex chars)" "" U_SECRET
+                ask "Секрет (32 hex-символа)" "" U_SECRET
                 if is_hex32 "$U_SECRET"; then break; fi
-                warn "Secret must be exactly 32 hexadecimal characters"
+                warn "Секрет должен содержать ровно 32 шестнадцатеричных символа"
             done
         fi
 
         USERS+=("${U_NAME}:${U_SECRET}")
 
-        ask_yn "Add another user?" "n" ADD_MORE
+        ask_yn "Добавить ещё одного пользователя?" "n" ADD_MORE
         [[ "$ADD_MORE" == "false" ]] && break
     done
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 8 — PUBLIC LINKS
+# ШАГ 8 — ПУБЛИЧНЫЕ ССЫЛКИ
 # ──────────────────────────────────────────────────────────────────────────────
 step_links() {
-    step "Public connection links"
+    step "Публичные ссылки для подключения"
     hr
-    info "These settings control the tg:// links shown after startup."
-    info "Leave public_host empty to auto-detect your server IP."
+    info "Эти настройки определяют tg://-ссылки, отображаемые после запуска."
+    info "Оставьте хост пустым — IP будет определён автоматически."
 
-    ask "Public hostname or IP for proxy links (empty = auto-detect)" "" PUBLIC_HOST
+    ask "Публичный хост или IP для ссылок (пусто = автоопределение)" "" PUBLIC_HOST
     if [[ -n "$PUBLIC_HOST" ]]; then
-        ask "Public port override for links" "$SERVER_PORT" PUBLIC_PORT
+        ask "Публичный порт для ссылок" "$SERVER_PORT" PUBLIC_PORT
     else
         PUBLIC_PORT="$SERVER_PORT"
     fi
 
     info ""
-    info "show_link controls which users get their link displayed."
-    menu "Show proxy links for:" \
-        "All users (*)" \
-        "No users (empty list)" \
-        "Specific users (enter names)"
+    info "show_link — для каких пользователей показывать ссылку при запуске."
+    menu "Показывать ссылки для:" \
+        "Всех пользователей (*)" \
+        "Никому (пустой список)" \
+        "Конкретных пользователей (указать имена)"
 
     case "$MENU_IDX" in
         0) SHOW_LINK='"*"' ;;
         1) SHOW_LINK='[]' ;;
         2)
-            ask "Comma-separated usernames to show links for" "" LINK_USERS
-            # Convert to TOML array format
+            ask "Имена пользователей через запятую" "" LINK_USERS
             IFS=',' read -ra LINK_ARR <<< "$LINK_USERS"
             TOML_LINK_ARR=""
             for u in "${LINK_ARR[@]}"; do
@@ -453,20 +453,20 @@ step_links() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 9 — AD TAG (SPONSORED CHANNEL)
+# ШАГ 9 — AD TAG (СПОНСОРСКИЙ КАНАЛ)
 # ──────────────────────────────────────────────────────────────────────────────
 step_adtag() {
-    step "Sponsored channel (ad_tag)"
+    step "Спонсорский канал (ad_tag)"
     hr
-    info "If you have a Telegram channel, you can monetise your proxy."
-    info "Get your ad_tag from @MTProxybot on Telegram."
+    info "Если у вас есть Telegram-канал, вы можете монетизировать прокси."
+    info "Получите ad_tag у бота @MTProxybot в Telegram."
 
-    ask_yn "Configure a sponsored channel ad_tag?" "n" WANT_ADTAG
+    ask_yn "Настроить спонсорский канал (ad_tag)?" "n" WANT_ADTAG
     if [[ "$WANT_ADTAG" == "true" ]]; then
         while true; do
-            ask "Ad tag (32 hex chars from @MTProxybot)" "" AD_TAG
+            ask "Ad tag (32 hex-символа от @MTProxybot)" "" AD_TAG
             if is_hex32 "$AD_TAG"; then break; fi
-            warn "Ad tag must be exactly 32 hexadecimal characters"
+            warn "Ad tag должен содержать ровно 32 шестнадцатеричных символа"
         done
     else
         AD_TAG=""
@@ -474,70 +474,74 @@ step_adtag() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 10 — API & METRICS
+# ШАГ 10 — API И МЕТРИКИ
 # ──────────────────────────────────────────────────────────────────────────────
 step_api() {
-    step "Admin API & Metrics"
+    step "Административный API и метрики"
     hr
-    info "The admin REST API allows runtime management (add/remove users, stats, etc.)."
-    info "It should only be accessible from localhost or trusted networks."
+    info "REST API позволяет управлять прокси в режиме реального времени."
+    info "Рекомендуется открывать только для localhost или доверенных сетей."
 
-    ask_yn "Enable admin REST API?" "y" API_ENABLED
+    ask_yn "Включить административный REST API?" "y" API_ENABLED
     if [[ "$API_ENABLED" == "true" ]]; then
-        ask "API listen address:port" "127.0.0.1:9091" API_LISTEN
-        ask "API whitelist CIDRs (comma-separated)" "127.0.0.0/8" API_WHITELIST_RAW
+        ask "Адрес:порт API" "127.0.0.1:9091" API_LISTEN
+        ask "Разрешённые сети для API (CIDR через запятую)" "127.0.0.0/8" API_WHITELIST_RAW
 
-        ask_yn "Enable read-only API mode?" "n" API_READONLY
-        ask_yn "Require Authorization header?" "n" API_AUTH
+        ask_yn "Включить режим только для чтения (read-only API)?" "n" API_READONLY
+        ask_yn "Требовать заголовок Authorization?" "n" API_AUTH
         if [[ "$API_AUTH" == "true" ]]; then
-            ask "Authorization header value (e.g. Bearer mysecrettoken)" "" API_AUTH_HEADER
+            ask "Значение заголовка Authorization (например: Bearer мойтокен)" "" API_AUTH_HEADER
         else
             API_AUTH_HEADER=""
         fi
     fi
 
     echo ""
-    ask_yn "Enable Prometheus metrics endpoint?" "n" METRICS_ENABLED
+    ask_yn "Включить эндпоинт метрик Prometheus?" "n" METRICS_ENABLED
     if [[ "$METRICS_ENABLED" == "true" ]]; then
-        ask "Metrics listen address:port" "127.0.0.1:9090" METRICS_LISTEN
-        ask "Metrics whitelist CIDRs (comma-separated)" "127.0.0.1/32,::1/128" METRICS_WHITELIST_RAW
+        ask "Адрес:порт метрик" "127.0.0.1:9090" METRICS_LISTEN
+        ask "Разрешённые сети для метрик (CIDR через запятую)" "127.0.0.1/32,::1/128" METRICS_WHITELIST_RAW
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 11 — LOGGING
+# ШАГ 11 — ЛОГИРОВАНИЕ
 # ──────────────────────────────────────────────────────────────────────────────
 step_logging() {
-    step "Logging"
+    step "Логирование"
     hr
 
-    menu "Log level:" "normal" "verbose" "debug" "silent"
-    LOG_LEVEL="$MENU_RESULT"
+    menu "Уровень логирования:" \
+        "normal — стандартный" \
+        "verbose — подробный" \
+        "debug — отладочный" \
+        "silent — без логов"
+    LOG_LEVEL="${MENU_RESULT%% *}"
 
-    ask_yn "Disable ANSI colors in logs?" "n" NO_COLORS
-    ask_yn "Enable per-IP observation / analytics (beobachten)?" "y" BEOBACHTEN
+    ask_yn "Отключить цвета ANSI в логах?" "n" NO_COLORS
+    ask_yn "Включить аналитику по IP-адресам (beobachten)?" "y" BEOBACHTEN
 
     if [[ "$BEOBACHTEN" == "true" ]]; then
-        ask "Observation retention window (minutes)" "10" BEOB_MINUTES
-        ask "Observation flush interval (seconds)" "15" BEOB_FLUSH
+        ask "Период хранения данных наблюдения (минут)" "10" BEOB_MINUTES
+        ask "Интервал сброса данных на диск (секунд)" "15" BEOB_FLUSH
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 12 — TIMEOUTS
+# ШАГ 12 — ТАЙМАУТЫ
 # ──────────────────────────────────────────────────────────────────────────────
 step_timeouts() {
-    step "Timeouts"
+    step "Таймауты соединений"
     hr
-    info "These control connection and idle behaviour."
+    info "Управляют поведением при установке соединения и простое."
 
-    ask_yn "Customise timeout settings?" "n" CUSTOM_TIMEOUTS
+    ask_yn "Настроить таймауты вручную?" "n" CUSTOM_TIMEOUTS
     if [[ "$CUSTOM_TIMEOUTS" == "true" ]]; then
-        ask "Client handshake timeout (seconds)" "30" TO_HANDSHAKE
-        ask "Client keepalive interval (seconds)" "15" TO_KEEPALIVE
-        ask "Relay idle soft threshold (seconds)" "120" TO_IDLE_SOFT
-        ask "Relay idle hard threshold (seconds)" "360" TO_IDLE_HARD
-        ask "Upstream connect timeout (seconds)" "10" TO_UPSTREAM
+        ask "Таймаут handshake клиента (секунд)" "30" TO_HANDSHAKE
+        ask "Интервал keepalive клиента (секунд)" "15" TO_KEEPALIVE
+        ask "Мягкий порог простоя relay (секунд)" "120" TO_IDLE_SOFT
+        ask "Жёсткий порог простоя relay (секунд)" "360" TO_IDLE_HARD
+        ask "Таймаут подключения к Telegram (секунд)" "10" TO_UPSTREAM
     else
         TO_HANDSHAKE="30"
         TO_KEEPALIVE="15"
@@ -548,15 +552,14 @@ step_timeouts() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 13 — ADVANCED / OPTIONAL
+# ШАГ 13 — РАСШИРЕННЫЕ НАСТРОЙКИ
 # ──────────────────────────────────────────────────────────────────────────────
 step_advanced() {
-    step "Advanced options"
+    step "Расширенные настройки"
     hr
 
-    ask_yn "Configure advanced options?" "n" WANT_ADVANCED
+    ask_yn "Настроить расширенные параметры?" "n" WANT_ADVANCED
     if [[ "$WANT_ADVANCED" == "false" ]]; then
-        # Set defaults
         PREFER_NET=4
         NET_MULTIPATH="false"
         STUN_ENABLED="true"
@@ -568,110 +571,106 @@ step_advanced() {
         return
     fi
 
-    info "Network preferences:"
-    menu "Prefer IP family for upstream connections:" "IPv4 (4)" "IPv6 (6)"
+    info "Предпочтение IP-версии для исходящих соединений:"
+    menu "Предпочитать:" "IPv4 (4)" "IPv6 (6)"
     PREFER_NET=$((MENU_IDX == 0 ? 4 : 6))
 
-    ask_yn "Enable multipath (experimental)?" "n" NET_MULTIPATH
-    ask_yn "Enable STUN for NAT IP detection?" "y" STUN_ENABLED
+    ask_yn "Включить multipath (экспериментально)?" "n" NET_MULTIPATH
+    ask_yn "Включить STUN для определения публичного IP (NAT)?" "y" STUN_ENABLED
 
     echo ""
-    info "ME writer pool floor mode:"
-    menu "Pool floor mode:" "adaptive (auto-scale with traffic)" "static (fixed pool size)"
+    info "Режим нижней границы пула ME writer:"
+    menu "Режим пула:" \
+        "adaptive — автомасштабирование по нагрузке" \
+        "static — фиксированный размер пула"
     ME_POOL_FLOOR="$([ "$MENU_IDX" -eq 0 ] && echo adaptive || echo static)"
 
     echo ""
-    info "KDF policy controls cryptographic compatibility:"
-    menu "ME SOCKS KDF policy:" "strict" "compat (wider compatibility)"
+    info "KDF-политика определяет криптографическую совместимость:"
+    menu "Политика ME SOCKS KDF:" \
+        "strict — строгая" \
+        "compat — совместимая (шире поддержка клиентов)"
     ME_KDF_POLICY="$([ "$MENU_IDX" -eq 0 ] && echo strict || echo compat)"
 
-    ask_yn "Enable hardswap (generation-based pool rotation)?" "y" HARDSWAP
-    ask "Fast mode minimum TLS record size (0 = disabled)" "0" FAST_MODE_MIN_TLS
-    ask "Unified config refresh interval (seconds)" "300" UPDATE_EVERY
+    ask_yn "Включить hardswap (ротация пула по поколениям)?" "y" HARDSWAP
+    ask "Минимальный размер TLS-записи для fast mode (0 = отключено)" "0" FAST_MODE_MIN_TLS
+    ask "Интервал обновления конфигурации (секунд)" "300" UPDATE_EVERY
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# STEP 14 — SERVICE CONFIGURATION
+# ШАГ 14 — НАСТРОЙКА СЛУЖБЫ
 # ──────────────────────────────────────────────────────────────────────────────
 step_service() {
-    step "Service configuration"
+    step "Настройка системной службы"
     hr
 
     if [[ "$INSTALL_TYPE" == "docker" ]]; then
-        ask "Docker Compose project directory" "/opt/telemt" DOCKER_DIR
+        ask "Директория проекта Docker Compose" "/opt/telemt" DOCKER_DIR
         return
     fi
 
     if [[ "$SVC_MGR" == "none" ]]; then
-        warn "No service manager detected. Telemt will be installed but not registered as a service."
-        warn "Start manually with: ${INSTALL_DIR}/${BINARY_NAME} ${CONFIG_FILE}"
+        warn "Менеджер служб не обнаружен. Telemt будет установлен, но не зарегистрирован как служба."
+        warn "Запустите вручную: ${INSTALL_DIR}/${BINARY_NAME} ${CONFIG_FILE}"
         ENABLE_SERVICE="false"
         return
     fi
 
-    ask_yn "Register and enable telemt as a system service?" "y" ENABLE_SERVICE
-    ask_yn "Start telemt service immediately after install?" "y" START_SERVICE
+    ask_yn "Зарегистрировать и включить Telemt как системную службу?" "y" ENABLE_SERVICE
+    ask_yn "Запустить службу Telemt сразу после установки?" "y" START_SERVICE
 
-    ask "Install directory for binary" "/usr/bin" INSTALL_DIR
-    ask "Configuration directory" "/etc/telemt" CONFIG_DIR
-    ask "Data / working directory" "/var/lib/telemt" DATA_DIR
+    ask "Директория для бинарного файла" "/usr/bin" INSTALL_DIR
+    ask "Директория конфигурации" "/etc/telemt" CONFIG_DIR
+    ask "Рабочая директория (данные)" "/var/lib/telemt" DATA_DIR
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# REVIEW & CONFIRM
+# ПРОСМОТР И ПОДТВЕРЖДЕНИЕ
 # ──────────────────────────────────────────────────────────────────────────────
 review() {
-    step "Configuration summary"
+    step "Сводка настроек"
     hr
     echo ""
-    echo -e "  ${WHT}Install type      :${RST} ${INSTALL_TYPE}"
-    echo -e "  ${WHT}Version           :${RST} ${SELECTED_VERSION}"
+    echo -e "  ${WHT}Тип установки     :${RST} ${INSTALL_TYPE}"
+    echo -e "  ${WHT}Версия            :${RST} ${SELECTED_VERSION}"
 
     if [[ "$INSTALL_TYPE" == "binary" ]]; then
-        echo -e "  ${WHT}Binary path       :${RST} ${INSTALL_DIR}/${BINARY_NAME}"
-        echo -e "  ${WHT}Config file       :${RST} ${CONFIG_FILE}"
-        echo -e "  ${WHT}Data directory    :${RST} ${DATA_DIR}"
+        echo -e "  ${WHT}Бинарный файл     :${RST} ${INSTALL_DIR}/${BINARY_NAME}"
+        echo -e "  ${WHT}Файл конфигурации :${RST} ${CONFIG_FILE}"
+        echo -e "  ${WHT}Директория данных :${RST} ${DATA_DIR}"
     fi
 
-    echo -e "  ${WHT}Server port       :${RST} ${SERVER_PORT}"
-    echo -e "  ${WHT}IPv4 bind         :${RST} ${LISTEN_IPV4}"
-    echo -e "  ${WHT}IPv6 enabled      :${RST} ${ENABLE_IPV6}"
-    echo -e "  ${WHT}Modes             :${RST} TLS=${MODE_TLS}  Secure=${MODE_SECURE}  Classic=${MODE_CLASSIC}"
-    echo -e "  ${WHT}TLS domain        :${RST} ${TLS_DOMAIN}"
-    echo -e "  ${WHT}Masking           :${RST} ${MASK_ENABLED}"
+    echo -e "  ${WHT}Порт сервера      :${RST} ${SERVER_PORT}"
+    echo -e "  ${WHT}Привязка IPv4     :${RST} ${LISTEN_IPV4}"
+    echo -e "  ${WHT}IPv6              :${RST} ${ENABLE_IPV6}"
+    echo -e "  ${WHT}Режимы            :${RST} TLS=${MODE_TLS}  Secure=${MODE_SECURE}  Classic=${MODE_CLASSIC}"
+    echo -e "  ${WHT}TLS-домен         :${RST} ${TLS_DOMAIN}"
+    echo -e "  ${WHT}Маскировка        :${RST} ${MASK_ENABLED}"
     echo -e "  ${WHT}Middle proxy (ME) :${RST} ${USE_MIDDLE_PROXY}"
-    echo -e "  ${WHT}Log level         :${RST} ${LOG_LEVEL}"
+    echo -e "  ${WHT}Уровень логов     :${RST} ${LOG_LEVEL}"
 
     echo ""
-    echo -e "  ${WHT}Users:${RST}"
+    echo -e "  ${WHT}Пользователи:${RST}"
     for u in "${USERS[@]}"; do
         local name="${u%%:*}"
         local secret="${u##*:}"
         echo -e "    ${CYN}${name}${RST}  →  ${DIM}${secret}${RST}"
     done
 
-    if [[ -n "$AD_TAG" ]]; then
-        echo -e "  ${WHT}Ad tag            :${RST} ${AD_TAG}"
-    fi
-
-    if [[ "$API_ENABLED" == "true" ]]; then
-        echo -e "  ${WHT}API               :${RST} ${API_LISTEN}"
-    fi
-    if [[ "$METRICS_ENABLED" == "true" ]]; then
-        echo -e "  ${WHT}Metrics           :${RST} ${METRICS_LISTEN}"
-    fi
+    [[ -n "$AD_TAG" ]] && echo -e "  ${WHT}Ad tag            :${RST} ${AD_TAG}"
+    [[ "$API_ENABLED" == "true" ]] && echo -e "  ${WHT}API               :${RST} ${API_LISTEN}"
+    [[ "$METRICS_ENABLED" == "true" ]] && echo -e "  ${WHT}Метрики           :${RST} ${METRICS_LISTEN}"
 
     echo ""
     hr
-    ask_yn "Proceed with installation?" "y" CONFIRMED
-    [[ "$CONFIRMED" == "false" ]] && die "Installation cancelled."
+    ask_yn "Начать установку?" "y" CONFIRMED
+    [[ "$CONFIRMED" == "false" ]] && die "Установка отменена."
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# GENERATE config.toml
+# ГЕНЕРАЦИЯ config.toml
 # ──────────────────────────────────────────────────────────────────────────────
 generate_config() {
-    # Build API whitelist TOML array
     local api_wl_toml=""
     if [[ "$API_ENABLED" == "true" ]]; then
         IFS=',' read -ra wl_arr <<< "${API_WHITELIST_RAW:-127.0.0.0/8}"
@@ -682,7 +681,6 @@ generate_config() {
         api_wl_toml="[${api_wl_toml%, }]"
     fi
 
-    # Build metrics whitelist TOML array
     local metrics_wl_toml=""
     if [[ "$METRICS_ENABLED" == "true" ]]; then
         IFS=',' read -ra mwl_arr <<< "${METRICS_WHITELIST_RAW:-127.0.0.1/32}"
@@ -693,35 +691,30 @@ generate_config() {
         metrics_wl_toml="[${metrics_wl_toml%, }]"
     fi
 
-    # Build TLS domains list
     local extra_domains=""
     [[ -n "$TLS_DOMAIN" ]] && extra_domains="tls_domains = []"
 
-    # Build MASK HOST
     local mask_host_line=""
     [[ -n "${MASK_HOST:-}" ]] && mask_host_line="mask_host = \"${MASK_HOST}\""
 
-    # Build public host lines
     local pub_host_line=""
     local pub_port_line=""
     [[ -n "${PUBLIC_HOST:-}" ]] && pub_host_line="public_host = \"${PUBLIC_HOST}\""
     [[ -n "${PUBLIC_PORT:-}" ]] && pub_port_line="public_port = ${PUBLIC_PORT}"
 
-    # Build ad_tag line
     local adtag_line=""
     [[ -n "${AD_TAG:-}" ]] && adtag_line="ad_tag = \"${AD_TAG}\""
 
-    # Auth header line
     local auth_header_line=""
     [[ -n "${API_AUTH_HEADER:-}" ]] && auth_header_line="auth_header = \"${API_AUTH_HEADER}\""
 
     CONFIG_CONTENT="# =============================================================================
-# Telemt MTProto Proxy Configuration
-# Generated by install_telemt.sh on $(date -u '+%Y-%m-%dT%H:%M:%SZ')
-# Full reference: https://github.com/telemt/telemt/blob/main/docs/CONFIG_PARAMS.en.md
+# Telemt MTProto Прокси — Конфигурация
+# Сгенерировано install_telemt.sh от $(date -u '+%Y-%m-%dT%H:%M:%SZ')
+# Полный справочник: https://github.com/telemt/telemt/blob/main/docs/CONFIG_PARAMS.en.md
 # =============================================================================
 
-# Link visibility — which users see their tg:// link on startup
+# Видимость ссылок — для каких пользователей показывать tg://-ссылку при запуске
 show_link = ${SHOW_LINK}
 
 # =============================================================================
@@ -740,13 +733,13 @@ beobachten_file  = \"cache/beobachten.txt\"
 fast_mode_min_tls_record = ${FAST_MODE_MIN_TLS:-0}
 update_every     = ${UPDATE_EVERY:-300}
 $([ -n "$adtag_line" ] && echo "$adtag_line")
-$([ -n "$adtag_line" ] || echo "# ad_tag = \"\"  # Uncomment and set your 32-char hex tag from @MTProxybot")
+$([ -n "$adtag_line" ] || echo "# ad_tag = \"\"  # Раскомментируйте и укажите тег от @MTProxybot")
 
-# Middle-End pool
-middle_proxy_pool_size  = ${ME_POOL_SIZE}
+# Пул Middle-End соединений
+middle_proxy_pool_size    = ${ME_POOL_SIZE}
 middle_proxy_warm_standby = ${ME_WARM_STANDBY}
-me_floor_mode           = \"${ME_POOL_FLOOR:-adaptive}\"
-me_socks_kdf_policy     = \"${ME_KDF_POLICY:-strict}\"
+me_floor_mode             = \"${ME_POOL_FLOOR:-adaptive}\"
+me_socks_kdf_policy       = \"${ME_KDF_POLICY:-strict}\"
 
 # =============================================================================
 [general.modes]
@@ -760,7 +753,7 @@ tls     = ${MODE_TLS}
 [general.links]
 # =============================================================================
 
-$([ -n "$pub_host_line" ] && echo "$pub_host_line" || echo "# public_host = \"your.server.ip\"")
+$([ -n "$pub_host_line" ] && echo "$pub_host_line" || echo "# public_host = \"ваш.ip.или.домен\"")
 $([ -n "$pub_port_line" ] && echo "$pub_port_line" || echo "# public_port = ${SERVER_PORT}")
 
 # =============================================================================
@@ -775,21 +768,21 @@ me_level     = \"normal\"
 [network]
 # =============================================================================
 
-ipv4       = true
-ipv6       = ${ENABLE_IPV6}
-prefer     = ${PREFER_NET:-4}
-multipath  = ${NET_MULTIPATH:-false}
-stun_use   = ${STUN_ENABLED:-true}
+ipv4      = true
+ipv6      = ${ENABLE_IPV6}
+prefer    = ${PREFER_NET:-4}
+multipath = ${NET_MULTIPATH:-false}
+stun_use  = ${STUN_ENABLED:-true}
 
 # =============================================================================
 [server]
 # =============================================================================
 
-port              = ${SERVER_PORT}
-listen_addr_ipv4  = \"${LISTEN_IPV4}\"
-$([ "$ENABLE_IPV6" == "true" ] && echo "listen_addr_ipv6  = \"${LISTEN_IPV6}\"" || echo "# listen_addr_ipv6 = \"::\"")
-proxy_protocol    = ${PROXY_PROTOCOL}
-max_connections   = ${MAX_CONNECTIONS}
+port             = ${SERVER_PORT}
+listen_addr_ipv4 = \"${LISTEN_IPV4}\"
+$([ "$ENABLE_IPV6" == "true" ] && echo "listen_addr_ipv6 = \"${LISTEN_IPV6}\"" || echo "# listen_addr_ipv6 = \"::\"")
+proxy_protocol   = ${PROXY_PROTOCOL}
+max_connections  = ${MAX_CONNECTIONS}
 
 $([ "$METRICS_ENABLED" == "true" ] && echo "metrics_listen    = \"${METRICS_LISTEN}\"" || echo "# metrics_listen = \"127.0.0.1:9090\"")
 $([ "$METRICS_ENABLED" == "true" ] && echo "metrics_whitelist = ${metrics_wl_toml}" || echo "# metrics_whitelist = [\"127.0.0.1/32\"]")
@@ -798,12 +791,12 @@ $([ "$METRICS_ENABLED" == "true" ] && echo "metrics_whitelist = ${metrics_wl_tom
 [server.api]
 # =============================================================================
 
-enabled        = ${API_ENABLED}
-$([ "$API_ENABLED" == "true" ] && echo "listen         = \"${API_LISTEN}\"" || echo "# listen = \"127.0.0.1:9091\"")
-$([ "$API_ENABLED" == "true" ] && echo "whitelist      = ${api_wl_toml}" || echo "# whitelist = [\"127.0.0.0/8\"]")
-$([ "${API_READONLY:-false}" == "true" ] && echo "read_only      = true" || echo "read_only      = false")
+enabled   = ${API_ENABLED}
+$([ "$API_ENABLED" == "true" ] && echo "listen    = \"${API_LISTEN}\"" || echo "# listen = \"127.0.0.1:9091\"")
+$([ "$API_ENABLED" == "true" ] && echo "whitelist = ${api_wl_toml}" || echo "# whitelist = [\"127.0.0.0/8\"]")
+$([ "${API_READONLY:-false}" == "true" ] && echo "read_only = true" || echo "read_only = false")
 $([ -n "$auth_header_line" ] && echo "$auth_header_line")
-minimal_runtime_enabled  = true
+minimal_runtime_enabled      = true
 minimal_runtime_cache_ttl_ms = 1000
 
 # =============================================================================
@@ -816,24 +809,24 @@ ip = \"${LISTEN_IPV4}\"
 [timeouts]
 # =============================================================================
 
-client_handshake           = ${TO_HANDSHAKE}
-client_keepalive           = ${TO_KEEPALIVE}
-relay_idle_policy_v2_enabled = true
-relay_client_idle_soft_secs  = ${TO_IDLE_SOFT}
-relay_client_idle_hard_secs  = ${TO_IDLE_HARD}
-tg_connect                 = ${TO_UPSTREAM}
+client_handshake              = ${TO_HANDSHAKE}
+client_keepalive              = ${TO_KEEPALIVE}
+relay_idle_policy_v2_enabled  = true
+relay_client_idle_soft_secs   = ${TO_IDLE_SOFT}
+relay_client_idle_hard_secs   = ${TO_IDLE_HARD}
+tg_connect                    = ${TO_UPSTREAM}
 
 # =============================================================================
 [censorship]
 # =============================================================================
 
-tls_domain       = \"${TLS_DOMAIN}\"
+tls_domain        = \"${TLS_DOMAIN}\"
 ${extra_domains}
 unknown_sni_action = \"${UNKNOWN_SNI}\"
-mask             = ${MASK_ENABLED}
+mask              = ${MASK_ENABLED}
 $([ -n "$mask_host_line" ] && echo "$mask_host_line")
-tls_emulation    = ${TLS_EMULATION}
-tls_front_dir    = \"tlsfront\"
+tls_emulation     = ${TLS_EMULATION}
+tls_front_dir     = \"tlsfront\"
 mask_shape_hardening = true
 
 # =============================================================================
@@ -841,7 +834,6 @@ mask_shape_hardening = true
 # =============================================================================
 "
 
-    # Append each user
     for u in "${USERS[@]}"; do
         local uname="${u%%:*}"
         local usecret="${u##*:}"
@@ -854,95 +846,87 @@ secret = \"${usecret}\"
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# INSTALL BINARY
+# УСТАНОВКА БИНАРНИКА
 # ──────────────────────────────────────────────────────────────────────────────
 install_binary() {
-    step "Downloading Telemt binary"
+    step "Загрузка бинарного файла Telemt"
     hr
 
-    # Resolve version
     local version="$SELECTED_VERSION"
     if [[ "$version" == "latest" ]]; then
-        version="$(get_latest_version)" || die "Failed to fetch latest version"
+        version="$(get_latest_version)" || die "Не удалось получить последнюю версию"
     fi
-    # Remove leading 'v' if present for archive naming
     local ver_clean="${version#v}"
-
-    # Build asset name
     local asset="telemt-${ver_clean}-${ARCH}-unknown-linux-${LIBC}.tar.gz"
     local url="https://github.com/${REPO}/releases/download/${version}/${asset}"
 
-    info "Downloading: ${url}"
+    info "Загрузка: ${url}"
     local tmpdir
     tmpdir="$(mktemp -d)"
     trap "rm -rf '${tmpdir}'" EXIT
 
     download "$url" "${tmpdir}/${asset}"
-    ok "Downloaded ${asset}"
+    ok "Загружен: ${asset}"
 
-    info "Extracting..."
+    info "Распаковка..."
     tar -xzf "${tmpdir}/${asset}" -C "${tmpdir}/"
     local extracted_bin
     extracted_bin="$(find "${tmpdir}" -type f -name "${BINARY_NAME}" | head -1)"
-    [[ -z "$extracted_bin" ]] && die "Binary not found in archive"
+    [[ -z "$extracted_bin" ]] && die "Бинарный файл не найден в архиве"
 
     install -Dm755 "$extracted_bin" "${INSTALL_DIR}/${BINARY_NAME}"
-    ok "Installed: ${INSTALL_DIR}/${BINARY_NAME}"
+    ok "Установлен: ${INSTALL_DIR}/${BINARY_NAME}"
 
-    # Grant capability to bind low ports without root
     if command -v setcap &>/dev/null; then
         setcap cap_net_bind_service+eip "${INSTALL_DIR}/${BINARY_NAME}"
-        ok "Set CAP_NET_BIND_SERVICE capability"
+        ok "Установлена capability CAP_NET_BIND_SERVICE"
     else
-        warn "setcap not found — you may need root to bind port ${SERVER_PORT}"
-        warn "Install libcap2-bin (Debian/Ubuntu) or libcap (RHEL/Alpine)"
+        warn "setcap не найден — для привязки к порту ${SERVER_PORT} может потребоваться root"
+        warn "Установите: libcap2-bin (Debian/Ubuntu) или libcap (RHEL/Alpine)"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CREATE USER, DIRS, CONFIG
+# СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ, ДИРЕКТОРИЙ, КОНФИГУРАЦИИ
 # ──────────────────────────────────────────────────────────────────────────────
 setup_environment() {
-    step "Setting up user, directories and configuration"
+    step "Создание пользователя, директорий и конфигурации"
     hr
 
-    # Create user/group
     if ! getent group "$SERVICE_GROUP" &>/dev/null; then
         groupadd --system "$SERVICE_GROUP"
-        ok "Created group: ${SERVICE_GROUP}"
+        ok "Создана группа: ${SERVICE_GROUP}"
     fi
     if ! id "$SERVICE_USER" &>/dev/null; then
         useradd --system --gid "$SERVICE_GROUP" \
             --no-create-home --shell /sbin/nologin \
             --home-dir "$DATA_DIR" "$SERVICE_USER"
-        ok "Created user: ${SERVICE_USER}"
+        ok "Создан пользователь: ${SERVICE_USER}"
     fi
 
-    # Create directories
     install -dm750 "$CONFIG_DIR"
     install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
     install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/cache"
     install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/tlsfront"
-    ok "Created directories"
+    ok "Директории созданы"
 
-    # Write config
     generate_config
     echo "$CONFIG_CONTENT" > "$CONFIG_FILE"
     chmod 640 "$CONFIG_FILE"
     chown root:"$SERVICE_GROUP" "$CONFIG_FILE"
-    ok "Config written: ${CONFIG_FILE}"
+    ok "Конфигурация записана: ${CONFIG_FILE}"
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# SYSTEMD SERVICE
+# SYSTEMD СЛУЖБА
 # ──────────────────────────────────────────────────────────────────────────────
 install_systemd() {
-    step "Installing systemd service"
+    step "Установка systemd-службы"
     hr
 
     cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=Telemt MTProto Proxy
+Description=Telemt MTProto Прокси
 Documentation=https://github.com/telemt/telemt
 Wants=network-online.target
 After=multi-user.target network-online.target
@@ -964,37 +948,37 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    ok "Systemd unit installed: ${SERVICE_FILE}"
+    ok "Systemd unit установлен: ${SERVICE_FILE}"
 
     if [[ "${ENABLE_SERVICE:-true}" == "true" ]]; then
         systemctl enable telemt
-        ok "Service enabled (auto-start on boot)"
+        ok "Служба включена (автозапуск при старте системы)"
     fi
 
     if [[ "${START_SERVICE:-true}" == "true" ]]; then
         systemctl start telemt
         sleep 1
         if systemctl is-active --quiet telemt; then
-            ok "Service started successfully"
+            ok "Служба успешно запущена"
         else
-            warn "Service failed to start. Check logs:"
+            warn "Не удалось запустить службу. Проверьте логи:"
             warn "  journalctl -u telemt -n 50 --no-pager"
         fi
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# OPENRC SERVICE
+# OPENRC СЛУЖБА
 # ──────────────────────────────────────────────────────────────────────────────
 install_openrc() {
-    step "Installing OpenRC service"
+    step "Установка OpenRC-службы"
     hr
 
     cat > "$OPENRC_FILE" << EOF
 #!/sbin/openrc-run
 
 name="telemt"
-description="Telemt MTProto Proxy"
+description="Telemt MTProto Прокси"
 command="${INSTALL_DIR}/${BINARY_NAME}"
 command_args="${CONFIG_FILE}"
 command_user="${SERVICE_USER}:${SERVICE_GROUP}"
@@ -1008,50 +992,45 @@ depend() {
 }
 EOF
     chmod 755 "$OPENRC_FILE"
-    ok "OpenRC service installed: ${OPENRC_FILE}"
+    ok "OpenRC-служба установлена: ${OPENRC_FILE}"
 
     if [[ "${ENABLE_SERVICE:-true}" == "true" ]]; then
         rc-update add telemt default
-        ok "Service enabled (auto-start)"
+        ok "Служба включена (автозапуск)"
     fi
 
     if [[ "${START_SERVICE:-true}" == "true" ]]; then
         rc-service telemt start
-        ok "Service started"
+        ok "Служба запущена"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# DOCKER INSTALL
+# DOCKER УСТАНОВКА
 # ──────────────────────────────────────────────────────────────────────────────
 install_docker() {
-    step "Setting up Docker deployment"
+    step "Настройка Docker-развёртывания"
     hr
 
-    command -v docker &>/dev/null || die "Docker is not installed. Install Docker first: https://docs.docker.com/engine/install/"
-    command -v docker &>/dev/null && docker compose version &>/dev/null 2>&1 \
-        || warn "docker compose plugin not found — trying docker-compose command"
+    command -v docker &>/dev/null || die "Docker не установлен. Сначала установите Docker: https://docs.docker.com/engine/install/"
 
     mkdir -p "${DOCKER_DIR}"
     generate_config
     echo "$CONFIG_CONTENT" > "${DOCKER_DIR}/config.toml"
     chmod 644 "${DOCKER_DIR}/config.toml"
-    ok "Config written: ${DOCKER_DIR}/config.toml"
+    ok "Конфигурация записана: ${DOCKER_DIR}/config.toml"
 
-    # Resolve tag
     local image_tag="latest"
     [[ "$SELECTED_VERSION" != "latest" ]] && image_tag="$SELECTED_VERSION"
 
-    # Metrics port line (optional)
     local metrics_port_line=""
     [[ "$METRICS_ENABLED" == "true" ]] && metrics_port_line="      - \"127.0.0.1:9090:9090\""
 
-    # API port line
     local api_port_line=""
     [[ "$API_ENABLED" == "true" ]] && api_port_line="      - \"127.0.0.1:9091:9091\""
 
     cat > "${DOCKER_DIR}/docker-compose.yml" << EOF
-# Generated by install_telemt.sh
+# Сгенерировано install_telemt.sh
 services:
   telemt:
     image: ghcr.io/telemt/telemt:${image_tag}
@@ -1081,9 +1060,9 @@ ${metrics_port_line:+$metrics_port_line}
     working_dir: /run/telemt
 EOF
 
-    ok "docker-compose.yml written: ${DOCKER_DIR}/docker-compose.yml"
+    ok "docker-compose.yml записан: ${DOCKER_DIR}/docker-compose.yml"
 
-    ask_yn "Start the container now?" "y" START_DOCKER
+    ask_yn "Запустить контейнер сейчас?" "y" START_DOCKER
     if [[ "$START_DOCKER" == "true" ]]; then
         cd "${DOCKER_DIR}"
         if docker compose version &>/dev/null 2>&1; then
@@ -1091,42 +1070,39 @@ EOF
         else
             docker-compose up -d
         fi
-        ok "Container started"
+        ok "Контейнер запущен"
     else
-        info "Start manually: cd ${DOCKER_DIR} && docker compose up -d"
+        info "Запустите вручную: cd ${DOCKER_DIR} && docker compose up -d"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PRINT PROXY LINKS
+# ВЫВОД ССЫЛОК ДЛЯ ПОДКЛЮЧЕНИЯ
 # ──────────────────────────────────────────────────────────────────────────────
 print_links() {
-    step "Proxy connection links"
+    step "Ссылки для подключения"
     hr
 
-    # Try to detect public IP if no public_host was set
     local host="${PUBLIC_HOST}"
     if [[ -z "$host" ]]; then
         if command -v curl &>/dev/null; then
             host="$(curl -fsSL --connect-timeout 5 https://api.ipify.org 2>/dev/null || echo "")"
         fi
-        [[ -z "$host" ]] && host="<YOUR_SERVER_IP>"
+        [[ -z "$host" ]] && host="<IP_ВАШЕГО_СЕРВЕРА>"
     fi
 
     local port="${PUBLIC_PORT:-$SERVER_PORT}"
 
     echo ""
-    echo -e "  ${WHT}Share these links with your Telegram clients:${RST}"
+    echo -e "  ${WHT}Скопируйте ссылку и отправьте пользователям:${RST}"
     echo ""
 
     for u in "${USERS[@]}"; do
         local uname="${u%%:*}"
         local usecret="${u##*:}"
-
-        # TLS mode secret prefix
         local tls_secret="ee${usecret}"
 
-        echo -e "  ${CYN}── User: ${uname} ──${RST}"
+        echo -e "  ${CYN}── Пользователь: ${uname} ──${RST}"
 
         if [[ "$MODE_TLS" == "true" ]]; then
             echo -e "    ${GRN}[TLS]${RST}     tg://proxy?server=${host}&port=${port}&secret=${tls_secret}"
@@ -1143,78 +1119,76 @@ print_links() {
 
     hr
     echo ""
-    echo -e "  ${WHT}Useful commands:${RST}"
+    echo -e "  ${WHT}Полезные команды:${RST}"
     if [[ "$INSTALL_TYPE" == "binary" ]]; then
         if [[ "$SVC_MGR" == "systemd" ]]; then
-            echo -e "    Status : ${CYN}systemctl status telemt${RST}"
-            echo -e "    Logs   : ${CYN}journalctl -u telemt -f${RST}"
-            echo -e "    Restart: ${CYN}systemctl restart telemt${RST}"
-            echo -e "    Stop   : ${CYN}systemctl stop telemt${RST}"
+            echo -e "    Статус  : ${CYN}systemctl status telemt${RST}"
+            echo -e "    Логи    : ${CYN}journalctl -u telemt -f${RST}"
+            echo -e "    Рестарт : ${CYN}systemctl restart telemt${RST}"
+            echo -e "    Стоп    : ${CYN}systemctl stop telemt${RST}"
         elif [[ "$SVC_MGR" == "openrc" ]]; then
-            echo -e "    Status : ${CYN}rc-service telemt status${RST}"
-            echo -e "    Restart: ${CYN}rc-service telemt restart${RST}"
+            echo -e "    Статус  : ${CYN}rc-service telemt status${RST}"
+            echo -e "    Рестарт : ${CYN}rc-service telemt restart${RST}"
         fi
-        echo -e "    Config : ${CYN}${CONFIG_FILE}${RST}"
+        echo -e "    Конфиг  : ${CYN}${CONFIG_FILE}${RST}"
     elif [[ "$INSTALL_TYPE" == "docker" ]]; then
-        echo -e "    Status : ${CYN}cd ${DOCKER_DIR} && docker compose ps${RST}"
-        echo -e "    Logs   : ${CYN}cd ${DOCKER_DIR} && docker compose logs -f${RST}"
-        echo -e "    Restart: ${CYN}cd ${DOCKER_DIR} && docker compose restart${RST}"
+        echo -e "    Статус  : ${CYN}cd ${DOCKER_DIR} && docker compose ps${RST}"
+        echo -e "    Логи    : ${CYN}cd ${DOCKER_DIR} && docker compose logs -f${RST}"
+        echo -e "    Рестарт : ${CYN}cd ${DOCKER_DIR} && docker compose restart${RST}"
     fi
     echo ""
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# UNINSTALL
+# УДАЛЕНИЕ
 # ──────────────────────────────────────────────────────────────────────────────
 do_uninstall() {
-    step "Uninstall"
+    step "Удаление"
     hr
 
     local is_purge="false"
     [[ "$INSTALL_TYPE" == "purge" ]] && is_purge="true"
 
-    # Stop & disable service
     if command -v systemctl &>/dev/null && systemctl list-units --full -all 2>/dev/null | grep -q "telemt.service"; then
         systemctl stop telemt 2>/dev/null || true
         systemctl disable telemt 2>/dev/null || true
         rm -f "$SERVICE_FILE"
         systemctl daemon-reload
-        ok "Systemd service removed"
+        ok "Systemd-служба удалена"
     fi
     if command -v rc-service &>/dev/null; then
         rc-service telemt stop 2>/dev/null || true
         rc-update del telemt 2>/dev/null || true
         rm -f "$OPENRC_FILE"
-        ok "OpenRC service removed"
+        ok "OpenRC-служба удалена"
     fi
 
-    # Remove binary
     rm -f "${INSTALL_DIR}/${BINARY_NAME}"
-    ok "Binary removed"
+    ok "Бинарный файл удалён"
 
     if [[ "$is_purge" == "true" ]]; then
         rm -rf "$CONFIG_DIR" "$DATA_DIR"
-        ok "Config and data directories removed"
+        ok "Директории конфигурации и данных удалены"
 
         if id "$SERVICE_USER" &>/dev/null; then
             userdel "$SERVICE_USER" 2>/dev/null || true
-            ok "User '${SERVICE_USER}' removed"
+            ok "Пользователь '${SERVICE_USER}' удалён"
         fi
         if getent group "$SERVICE_GROUP" &>/dev/null; then
             groupdel "$SERVICE_GROUP" 2>/dev/null || true
-            ok "Group '${SERVICE_GROUP}' removed"
+            ok "Группа '${SERVICE_GROUP}' удалена"
         fi
-        ok "Purge complete"
+        ok "Полная очистка завершена"
     else
-        ok "Uninstall complete (config and data preserved)"
-        info "Config: ${CONFIG_FILE}"
-        info "Data:   ${DATA_DIR}"
-        info "To remove all data: re-run with Purge option"
+        ok "Удаление завершено (конфигурация и данные сохранены)"
+        info "Конфиг: ${CONFIG_FILE}"
+        info "Данные: ${DATA_DIR}"
+        info "Для полного удаления запустите снова и выберите 'Полное удаление'"
     fi
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-# MAIN
+# ТОЧКА ВХОДА
 # ──────────────────────────────────────────────────────────────────────────────
 main() {
     banner
@@ -1236,7 +1210,7 @@ main() {
     review
 
     echo ""
-    step "Installing"
+    step "Установка"
     hr
 
     if [[ "$INSTALL_TYPE" == "binary" ]]; then
@@ -1248,7 +1222,7 @@ main() {
         elif [[ "$SVC_MGR" == "openrc" ]]; then
             install_openrc
         else
-            warn "No service manager — start manually:"
+            warn "Менеджер служб не найден — запустите вручную:"
             warn "  sudo -u ${SERVICE_USER} ${INSTALL_DIR}/${BINARY_NAME} ${CONFIG_FILE}"
         fi
 
@@ -1258,7 +1232,7 @@ main() {
 
     print_links
 
-    echo -e "\n  ${GRN}${BOLD}Installation complete!${RST}\n"
+    echo -e "\n  ${GRN}${BOLD}Установка завершена!${RST}\n"
 }
 
 main "$@"
