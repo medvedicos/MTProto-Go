@@ -732,7 +732,7 @@ beobachten_flush_secs = ${BEOB_FLUSH:-15}
 beobachten_file  = \"cache/beobachten.txt\"
 fast_mode_min_tls_record = ${FAST_MODE_MIN_TLS:-0}
 update_every     = ${UPDATE_EVERY:-300}
-$([ -n "$adtag_line" ] && echo "$adtag_line")
+$([ -n "$adtag_line" ] && echo "$adtag_line" || true)
 $([ -n "$adtag_line" ] || echo "# ad_tag = \"\"  # Раскомментируйте и укажите тег от @MTProxybot")
 
 # Пул Middle-End соединений
@@ -795,7 +795,7 @@ enabled   = ${API_ENABLED}
 $([ "$API_ENABLED" == "true" ] && echo "listen    = \"${API_LISTEN}\"" || echo "# listen = \"127.0.0.1:9091\"")
 $([ "$API_ENABLED" == "true" ] && echo "whitelist = ${api_wl_toml}" || echo "# whitelist = [\"127.0.0.0/8\"]")
 $([ "${API_READONLY:-false}" == "true" ] && echo "read_only = true" || echo "read_only = false")
-$([ -n "$auth_header_line" ] && echo "$auth_header_line")
+$([ -n "$auth_header_line" ] && echo "$auth_header_line" || true)
 minimal_runtime_enabled      = true
 minimal_runtime_cache_ttl_ms = 1000
 
@@ -824,7 +824,7 @@ tls_domain        = \"${TLS_DOMAIN}\"
 ${extra_domains}
 unknown_sni_action = \"${UNKNOWN_SNI}\"
 mask              = ${MASK_ENABLED}
-$([ -n "$mask_host_line" ] && echo "$mask_host_line")
+$([ -n "$mask_host_line" ] && echo "$mask_host_line" || true)
 tls_emulation     = ${TLS_EMULATION}
 tls_front_dir     = \"tlsfront\"
 mask_shape_hardening = true
