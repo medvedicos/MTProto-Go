@@ -856,8 +856,9 @@ install_binary() {
     if [[ "$version" == "latest" ]]; then
         version="$(get_latest_version)" || die "Не удалось получить последнюю версию"
     fi
-    local ver_clean="${version#v}"
-    local asset="telemt-${ver_clean}-${ARCH}-unknown-linux-${LIBC}.tar.gz"
+
+    # Реальный формат архивов: telemt-{ARCH}-linux-{LIBC}.tar.gz (без версии в имени)
+    local asset="telemt-${ARCH}-linux-${LIBC}.tar.gz"
     local url="https://github.com/${REPO}/releases/download/${version}/${asset}"
 
     info "Загрузка: ${url}"
