@@ -829,7 +829,7 @@ tls_emulation     = ${TLS_EMULATION}
 tls_front_dir     = \"tlsfront\"
 mask_shape_hardening = true
 
-[access]
+[access.users]
 "
 
     for u in "${USERS[@]}"; do
