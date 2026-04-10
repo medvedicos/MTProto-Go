@@ -829,18 +829,13 @@ tls_emulation     = ${TLS_EMULATION}
 tls_front_dir     = \"tlsfront\"
 mask_shape_hardening = true
 
-# =============================================================================
 [access]
-# =============================================================================
 "
 
     for u in "${USERS[@]}"; do
         local uname="${u%%:*}"
         local usecret="${u##*:}"
-        CONFIG_CONTENT+="
-[[access.user]]
-name   = \"${uname}\"
-secret = \"${usecret}\"
+        CONFIG_CONTENT+="${uname} = \"${usecret}\"
 "
     done
 }
