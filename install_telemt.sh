@@ -905,7 +905,7 @@ setup_environment() {
         ok "Создан пользователь: ${SERVICE_USER}"
     fi
 
-    install -dm750 "$CONFIG_DIR"
+    install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$CONFIG_DIR"
     install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$DATA_DIR"
     install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/cache"
     install -dm750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "${DATA_DIR}/tlsfront"
@@ -914,7 +914,7 @@ setup_environment() {
     generate_config
     echo "$CONFIG_CONTENT" > "$CONFIG_FILE"
     chmod 640 "$CONFIG_FILE"
-    chown root:"$SERVICE_GROUP" "$CONFIG_FILE"
+    chown "$SERVICE_USER":"$SERVICE_GROUP" "$CONFIG_FILE"
     ok "Конфигурация записана: ${CONFIG_FILE}"
 }
 
