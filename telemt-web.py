@@ -422,46 +422,39 @@ def api_user_limits():
         return jsonify({'ok': False, 'error': 'Укажите имя пользователя'})
 
     limits = {}
-    # max_tcp_conns: int или None
-    if 'max_tcp_conns' in d:
-        try:
-            v = d['max_tcp_conns']
-            limits['max_tcp_conns'] = int(v) if v else None
-        except:
-            limits['max_tcp_conns'] = None
 
-    # max_unique_ips: int или None
-    if 'max_unique_ips' in d:
-        try:
-            v = d['max_unique_ips']
-            limits['max_unique_ips'] = int(v) if v else None
-        except:
-            limits['max_unique_ips'] = None
+    # max_tcp_conns — всегда включаем: int или None (пусто = снять лимит)
+    v = d.get('max_tcp_conns')
+    try:
+        limits['max_tcp_conns'] = int(v) if v else None
+    except:
+        limits['max_tcp_conns'] = None
 
-    # data_quota_bytes: конвертируем из value+unit или принимаем напрямую
-    if d.get('quota_value') and d.get('quota_unit'):
-        q = parse_quota(d['quota_value'], d['quota_unit'])
-        limits['data_quota_bytes'] = q  # None если ошибка
-    elif 'data_quota_bytes' in d:
-        try:
-            v = d['data_quota_bytes']
-            limits['data_quota_bytes'] = int(v) if v else None
-        except:
-            limits['data_quota_bytes'] = None
+    # max_unique_ips — всегда включаем
+    v = d.get('max_unique_ips')
+    try:
+        limits['max_unique_ips'] = int(v) if v else None
+    except:
+        limits['max_unique_ips'] = None
 
-    # expiration_rfc3339: строка или None
-    if 'expiration' in d:
-        v = d['expiration']
-        if v:
-            try:
-                datetime.fromisoformat(v)
-                limits['expiration_rfc3339'] = (
-                    v + ':00+00:00' if len(v) == 16 else v
-                )
-            except:
-                return jsonify({'ok': False, 'error': 'Неверный формат даты'})
-        else:
-            limits['expiration_rfc3339'] = None
+    # data_quota_bytes — всегда включаем; пустое поле = None = снять лимит
+    qv = d.get('quota_value')
+    qu = d.get('quota_unit')
+    if qv and qu:
+        limits['data_quota_bytes'] = parse_quota(qv, qu)  # None при ошибке
+    else:
+        limits['data_quota_bytes'] = None  # поле пустое → удалить из конфига
+
+    # expiration_rfc3339 — всегда включаем
+    v = d.get('expiration')
+    if v:
+        try:
+            datetime.fromisoformat(v)
+            limits['expiration_rfc3339'] = v + ':00+00:00' if len(v) == 16 else v
+        except:
+            return jsonify({'ok': False, 'error': 'Неверный формат даты'})
+    else:
+        limits['expiration_rfc3339'] = None
 
     ok, err = set_user_limits(username, limits)
     if not ok:
