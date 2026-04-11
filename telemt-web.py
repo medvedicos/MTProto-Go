@@ -59,76 +59,125 @@ def write_config(content):
     except Exception as e:
         return False, str(e)
 
+# Маппинг поля лимита → секция TOML
+LIMIT_SECTIONS = {
+    'max_tcp_conns':    'access.user_max_tcp_conns',
+    'max_unique_ips':   'access.user_max_unique_ips',
+    'data_quota_bytes': 'access.user_data_quota',
+    'expiration_rfc3339': 'access.user_expirations',
+}
+
+def _set_section_entry(content, section, key, value):
+    """
+    Добавить/обновить/удалить запись key=value в секции [section].
+    value=None — удаляет запись.
+    Создаёт секцию, если её нет.
+    """
+    # Форматируем значение
+    if value is None:
+        val_str = None
+    elif isinstance(value, str):
+        val_str = f'"{value}"'
+    else:
+        val_str = str(int(value))
+
+    # Ищем начало секции
+    sec_match = re.search(
+        rf'^\[{re.escape(section)}\][ \t]*\n', content, re.MULTILINE
+    )
+
+    if val_str is None:
+        # Удаление: если секции нет — ничего не делаем
+        if not sec_match:
+            return content
+        sec_start = sec_match.end()
+        nxt = re.search(r'^\[', content[sec_start:], re.MULTILINE)
+        sec_end = sec_start + nxt.start() if nxt else len(content)
+        body = content[sec_start:sec_end]
+        body = re.sub(rf'^{re.escape(key)}\s*=.*\n?', '', body, flags=re.MULTILINE)
+        return content[:sec_start] + body + content[sec_end:]
+
+    if not sec_match:
+        # Секции нет — добавляем в конец
+        return content.rstrip('\n') + f'\n\n[{section}]\n{key} = {val_str}\n'
+
+    sec_start = sec_match.end()
+    nxt = re.search(r'^\[', content[sec_start:], re.MULTILINE)
+    sec_end = sec_start + nxt.start() if nxt else len(content)
+    body = content[sec_start:sec_end]
+
+    if re.search(rf'^{re.escape(key)}\s*=', body, re.MULTILINE):
+        # Обновляем существующую запись
+        body = re.sub(
+            rf'^{re.escape(key)}\s*=.*$',
+            f'{key} = {val_str}',
+            body, flags=re.MULTILINE
+        )
+    else:
+        # Добавляем новую запись в конец секции
+        body = body.rstrip('\n') + f'\n{key} = {val_str}\n'
+
+    return content[:sec_start] + body + content[sec_end:]
+
 def add_user_to_config(username, secret, limits=None):
     """
-    Добавляет пользователя в конфиг.
-
-    Без лимитов: простой формат  →  username = "secret"  под [access.users]
-    С лимитами:  расширенный     →  [access.users.username] + поля лимитов
-    Оба формата нативно поддерживаются telemt.
+    Добавляет пользователя:
+      - секрет → [access.users]  username = "hex"
+      - лимиты → [access.user_max_tcp_conns], [access.user_max_unique_ips] и т.д.
     """
     content = read_config()
     if content is None:
         return False, 'Не удалось прочитать конфиг'
 
-    # Проверка дубликата в обоих форматах
-    if re.search(rf'^\s*{re.escape(username)}\s*=', content, re.MULTILINE):
-        return False, f'Пользователь "{username}" уже существует'
-    if re.search(rf'^\[access\.users\.{re.escape(username)}\]', content, re.MULTILINE):
-        return False, f'Пользователь "{username}" уже существует'
+    # Проверка дубликата в [access.users]
+    sec_match = re.search(r'^\[access\.users\][ \t]*\n', content, re.MULTILINE)
+    if sec_match:
+        sec_start = sec_match.end()
+        nxt = re.search(r'^\[', content[sec_start:], re.MULTILINE)
+        sec_end = sec_start + nxt.start() if nxt else len(content)
+        body = content[sec_start:sec_end]
+        if re.search(rf'^{re.escape(username)}\s*=', body, re.MULTILINE):
+            return False, f'Пользователь "{username}" уже существует'
 
+    # Добавляем секрет в [access.users]
+    content = _set_section_entry(content, 'access.users', username, secret)
+
+    # Добавляем лимиты в соответствующие секции
     if limits:
-        # Расширенный формат: [access.users.username] секция в конце файла
-        section = f'\n[access.users.{username}]\nsecret = "{secret}"\n'
-        if limits.get('max_tcp_conns'):
-            section += f'max_tcp_conns = {limits["max_tcp_conns"]}\n'
-        if limits.get('max_unique_ips'):
-            section += f'max_unique_ips = {limits["max_unique_ips"]}\n'
-        if limits.get('data_quota_bytes'):
-            section += f'data_quota_bytes = {limits["data_quota_bytes"]}\n'
-        if limits.get('expiration_rfc3339'):
-            section += f'expiration_rfc3339 = "{limits["expiration_rfc3339"]}"\n'
-        content = content.rstrip('\n') + '\n' + section
-    else:
-        # Простой формат: строка под [access.users]
-        if '[access.users]' not in content:
-            content += f'\n[access.users]\n{username} = "{secret}"\n'
-        else:
-            lines = content.split('\n')
-            insert_idx = len(lines)
-            in_access = False
-            for i, line in enumerate(lines):
-                s = line.strip()
-                if s == '[access.users]':
-                    in_access = True
-                elif in_access and s.startswith('[') and s != '[access.users]':
-                    insert_idx = i
-                    break
-            lines.insert(insert_idx, f'{username} = "{secret}"')
-            content = '\n'.join(lines)
+        for field, section in LIMIT_SECTIONS.items():
+            if limits.get(field):
+                content = _set_section_entry(content, section, username, limits[field])
 
     return write_config(content)
 
 def remove_user_from_config(username):
+    """Удаляет пользователя из [access.users] и всех секций лимитов."""
     content = read_config()
     if content is None:
         return False, 'Не удалось прочитать конфиг'
     original = content
 
-    # 1. Простой формат: username = "secret"
-    content = re.sub(
-        rf'^\s*{re.escape(username)}\s*=.*\n?', '',
-        content, flags=re.MULTILINE
-    )
-    # 2. Расширенный формат: [access.users.username] ... до следующей секции
-    #    Удаляем всё от заголовка секции до следующего [ или конца файла
-    content = re.sub(
-        rf'\n\[access\.users\.{re.escape(username)}\][^\[]*',
-        '\n', content, flags=re.DOTALL
-    )
+    # Удаляем из [access.users]
+    content = _set_section_entry(content, 'access.users', username, None)
+    # Удаляем из всех секций лимитов
+    for section in LIMIT_SECTIONS.values():
+        content = _set_section_entry(content, section, username, None)
 
     if content == original:
         return False, f'Пользователь "{username}" не найден в конфиге'
+    return write_config(content)
+
+def set_user_limits(username, limits):
+    """
+    Устанавливает или сбрасывает лимиты для существующего пользователя.
+    limits — dict с ключами из LIMIT_SECTIONS; значение None — сброс лимита.
+    """
+    content = read_config()
+    if content is None:
+        return False, 'Не удалось прочитать конфиг'
+    for field, section in LIMIT_SECTIONS.items():
+        if field in limits:
+            content = _set_section_entry(content, section, username, limits[field])
     return write_config(content)
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -265,7 +314,7 @@ def api_user_add():
     if not is_hex32(secret):
         return jsonify({'ok': False, 'error': 'Секрет: ровно 32 hex-символа'})
 
-    # Парсим лимиты для записи в TOML-конфиг
+    # Парсим лимиты для записи в TOML секции лимитов
     limits = {}
     if d.get('max_tcp_conns'):
         try: limits['max_tcp_conns'] = int(d['max_tcp_conns'])
@@ -301,6 +350,63 @@ def api_user_delete():
         return jsonify({'ok': False, 'error': 'Укажите имя'})
 
     ok, err = remove_user_from_config(username)
+    if not ok:
+        return jsonify({'ok': False, 'error': err})
+
+    ok2, _ = service_action('restart')
+    return jsonify({'ok': True, 'restarted': ok2})
+
+@app.route('/api/user/limits', methods=['POST'])
+@login_required
+def api_user_limits():
+    d = request.get_json() or {}
+    username = d.get('username', '').strip()
+    if not username:
+        return jsonify({'ok': False, 'error': 'Укажите имя пользователя'})
+
+    limits = {}
+    # max_tcp_conns: int или None
+    if 'max_tcp_conns' in d:
+        try:
+            v = d['max_tcp_conns']
+            limits['max_tcp_conns'] = int(v) if v else None
+        except:
+            limits['max_tcp_conns'] = None
+
+    # max_unique_ips: int или None
+    if 'max_unique_ips' in d:
+        try:
+            v = d['max_unique_ips']
+            limits['max_unique_ips'] = int(v) if v else None
+        except:
+            limits['max_unique_ips'] = None
+
+    # data_quota_bytes: конвертируем из value+unit или принимаем напрямую
+    if d.get('quota_value') and d.get('quota_unit'):
+        q = parse_quota(d['quota_value'], d['quota_unit'])
+        limits['data_quota_bytes'] = q  # None если ошибка
+    elif 'data_quota_bytes' in d:
+        try:
+            v = d['data_quota_bytes']
+            limits['data_quota_bytes'] = int(v) if v else None
+        except:
+            limits['data_quota_bytes'] = None
+
+    # expiration_rfc3339: строка или None
+    if 'expiration' in d:
+        v = d['expiration']
+        if v:
+            try:
+                datetime.fromisoformat(v)
+                limits['expiration_rfc3339'] = (
+                    v + ':00+00:00' if len(v) == 16 else v
+                )
+            except:
+                return jsonify({'ok': False, 'error': 'Неверный формат даты'})
+        else:
+            limits['expiration_rfc3339'] = None
+
+    ok, err = set_user_limits(username, limits)
     if not ok:
         return jsonify({'ok': False, 'error': err})
 
@@ -505,6 +611,73 @@ async function refreshStats(){
   }catch(e){}
 }
 setInterval(refreshStats, 10000);
+
+// ── Редактирование лимитов ─────────────────────────────────────────────────
+function bytesToQuota(bytes){
+  if(!bytes) return {val:'', unit:'gb'};
+  if(bytes >= 1024**4) return {val:(bytes/1024**4).toFixed(2), unit:'tb'};
+  if(bytes >= 1024**3) return {val:(bytes/1024**3).toFixed(2), unit:'gb'};
+  return {val:(bytes/1024**2).toFixed(1), unit:'mb'};
+}
+function openLimitsModal(username, maxConn, maxIps, quotaBytes, expire){
+  document.getElementById('lm-username').value       = username;
+  document.getElementById('lm-username-title').textContent = username;
+  document.getElementById('lm-maxconn').value        = maxConn || '';
+  document.getElementById('lm-maxips').value         = maxIps  || '';
+  const q = bytesToQuota(quotaBytes);
+  document.getElementById('lm-quota').value          = q.val;
+  document.getElementById('lm-quota-unit').value     = q.unit;
+  // Дата: конвертируем RFC3339 → datetime-local
+  if(expire){
+    try{
+      const dt = new Date(expire);
+      // datetime-local нужен формат YYYY-MM-DDTHH:MM
+      const pad = n => String(n).padStart(2,'0');
+      document.getElementById('lm-expire').value =
+        `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth()+1)}-${pad(dt.getUTCDate())}` +
+        `T${pad(dt.getUTCHours())}:${pad(dt.getUTCMinutes())}`;
+    }catch(e){ document.getElementById('lm-expire').value=''; }
+  } else {
+    document.getElementById('lm-expire').value = '';
+  }
+  new bootstrap.Modal(document.getElementById('limitsModal')).show();
+}
+async function saveLimits(){
+  const username  = document.getElementById('lm-username').value;
+  const maxConn   = document.getElementById('lm-maxconn').value.trim();
+  const maxIps    = document.getElementById('lm-maxips').value.trim();
+  const quotaVal  = document.getElementById('lm-quota').value.trim();
+  const quotaUnit = document.getElementById('lm-quota-unit').value;
+  const expire    = document.getElementById('lm-expire').value.trim();
+
+  const btn = document.getElementById('btn-limits-save');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  const r = await fetch('/api/user/limits', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      username,
+      max_tcp_conns:  maxConn  || null,
+      max_unique_ips: maxIps   || null,
+      quota_value:    quotaVal || null,
+      quota_unit:     quotaUnit,
+      expiration:     expire   || null
+    })
+  });
+  const d = await r.json();
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-floppy-fill"></i> Сохранить';
+
+  if(d.ok){
+    bootstrap.Modal.getInstance(document.getElementById('limitsModal')).hide();
+    toast(`<i class="bi bi-check2"></i> Лимиты пользователя <b>${username}</b> обновлены`,'success');
+    setTimeout(()=>location.reload(), 2000);
+  } else {
+    toast(`<i class="bi bi-x-circle"></i> ${d.error}`, 'danger');
+  }
+}
 </script>"""
 
 _NAVBAR = """
@@ -696,7 +869,7 @@ DASH_HTML = _HEAD + """
         <div class="col-12">
           <p class="text-secondary small mb-0">
             <i class="bi bi-info-circle"></i>
-            Ограничения записываются в TOML-конфиг telemt и применяются после перезапуска службы.
+            Ограничения записываются в нативные секции конфига telemt и применяются после перезапуска.
           </p>
         </div>
       </div>
@@ -745,6 +918,15 @@ DASH_HTML = _HEAD + """
       {% if u.active_unique_ips > 0 %}
       <span class="badge bg-secondary">{{ u.active_unique_ips }} IP</span>
       {% endif %}
+      <button class="btn btn-sm btn-outline-secondary"
+              onclick="openLimitsModal('{{ u.username }}',
+                {{ u.lim_conns|tojson }},
+                {{ u.lim_ips|tojson }},
+                {{ u.get('data_quota_bytes')|tojson }},
+                {{ u.lim_expire|tojson }})"
+              title="Изменить лимиты">
+        <i class="bi bi-sliders"></i>
+      </button>
       <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('{{ u.username }}')"
               title="Удалить пользователя">
         <i class="bi bi-trash"></i>
@@ -808,6 +990,69 @@ DASH_HTML = _HEAD + """
   <p class="mt-2">Пользователей нет. Добавьте первого выше.</p>
 </div>
 {% endfor %}
+</div>
+
+<!-- Модальное окно редактирования лимитов -->
+<div class="modal fade" id="limitsModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:#161b22;border:1px solid #30363d">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-info">
+          <i class="bi bi-sliders me-2"></i>Лимиты: <span id="lm-username-title"></span>
+        </h5>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="lm-username">
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label small text-secondary">
+              <i class="bi bi-link-45deg"></i> Макс. подключений
+            </label>
+            <input id="lm-maxconn" type="number" min="1" class="form-control form-control-sm"
+                   placeholder="без лимита">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-secondary">
+              <i class="bi bi-geo-alt"></i> Макс. уникальных IP
+            </label>
+            <input id="lm-maxips" type="number" min="1" class="form-control form-control-sm"
+                   placeholder="без лимита">
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-secondary">
+              <i class="bi bi-database"></i> Квота трафика
+            </label>
+            <div class="input-group input-group-sm">
+              <input id="lm-quota" type="number" min="0.1" step="0.1"
+                     class="form-control" placeholder="без лимита">
+              <select id="lm-quota-unit" class="form-select" style="max-width:70px">
+                <option value="mb">МБ</option>
+                <option value="gb" selected>ГБ</option>
+                <option value="tb">ТБ</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-secondary">
+              <i class="bi bi-calendar-x"></i> Срок действия (UTC)
+            </label>
+            <input id="lm-expire" type="datetime-local" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="mt-3 text-secondary small">
+          <i class="bi bi-info-circle"></i>
+          Оставьте поле пустым — лимит будет снят. Применится после перезапуска службы.
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Отмена</button>
+        <button class="btn btn-info btn-sm" id="btn-limits-save" onclick="saveLimits()">
+          <i class="bi bi-floppy-fill"></i> Сохранить
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 """ + _QR_MODAL + _SCRIPTS + """
