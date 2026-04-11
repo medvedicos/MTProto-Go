@@ -1,0 +1,19 @@
+[Unit]
+Description=Telemt Web Dashboard
+After=network.target telemt.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/telemt-web
+ExecStart=/opt/telemt-web/venv/bin/python3 /opt/telemt-web/telemt-web.py
+Restart=on-failure
+RestartSec=5
+Environment=DASHBOARD_PASSWORD=changeme
+Environment=DASHBOARD_PORT=8080
+Environment=DASHBOARD_HOST=0.0.0.0
+Environment=CONFIG_FILE=/etc/telemt/telemt.toml
+Environment=TELEMT_API=http://127.0.0.1:9091
+
+[Install]
+WantedBy=multi-user.target
