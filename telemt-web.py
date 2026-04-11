@@ -11,10 +11,9 @@ Telemt Web Dashboard
   DASHBOARD_HOST      — адрес (по умолчанию 0.0.0.0)
   TELEMT_API          — адрес API telemt (по умолчанию http://127.0.0.1:9091)
   CONFIG_FILE         — путь к конфигу (по умолчанию /etc/telemt/telemt.toml)
-  META_FILE           — файл лимитов (по умолчанию /etc/telemt/telemt-web-meta.json)
 """
 
-import os, re, json, subprocess, secrets
+import os, re, subprocess, secrets
 from functools import wraps
 from datetime import datetime, timezone
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
@@ -23,7 +22,6 @@ import requests as req
 # ──────────────────────────────────────────────────────────────────────────────
 TELEMT_API    = os.environ.get('TELEMT_API',          'http://127.0.0.1:9091')
 CONFIG_FILE   = os.environ.get('CONFIG_FILE',         '/etc/telemt/telemt.toml')
-META_FILE     = os.environ.get('META_FILE',           '/etc/telemt/telemt-web-meta.json')
 DASH_PASSWORD = os.environ.get('DASHBOARD_PASSWORD',  'changeme')
 DASH_PORT     = int(os.environ.get('DASHBOARD_PORT',  8080))
 DASH_HOST     = os.environ.get('DASHBOARD_HOST',      '0.0.0.0')
@@ -61,65 +59,77 @@ def write_config(content):
     except Exception as e:
         return False, str(e)
 
-def add_user_to_config(username, secret):
+def add_user_to_config(username, secret, limits=None):
+    """
+    Добавляет пользователя в конфиг.
+
+    Без лимитов: простой формат  →  username = "secret"  под [access.users]
+    С лимитами:  расширенный     →  [access.users.username] + поля лимитов
+    Оба формата нативно поддерживаются telemt.
+    """
     content = read_config()
     if content is None:
         return False, 'Не удалось прочитать конфиг'
+
+    # Проверка дубликата в обоих форматах
     if re.search(rf'^\s*{re.escape(username)}\s*=', content, re.MULTILINE):
         return False, f'Пользователь "{username}" уже существует'
-    if '[access.users]' not in content:
-        content += f'\n[access.users]\n{username} = "{secret}"\n'
+    if re.search(rf'^\[access\.users\.{re.escape(username)}\]', content, re.MULTILINE):
+        return False, f'Пользователь "{username}" уже существует'
+
+    if limits:
+        # Расширенный формат: [access.users.username] секция в конце файла
+        section = f'\n[access.users.{username}]\nsecret = "{secret}"\n'
+        if limits.get('max_tcp_conns'):
+            section += f'max_tcp_conns = {limits["max_tcp_conns"]}\n'
+        if limits.get('max_unique_ips'):
+            section += f'max_unique_ips = {limits["max_unique_ips"]}\n'
+        if limits.get('data_quota_bytes'):
+            section += f'data_quota_bytes = {limits["data_quota_bytes"]}\n'
+        if limits.get('expiration_rfc3339'):
+            section += f'expiration_rfc3339 = "{limits["expiration_rfc3339"]}"\n'
+        content = content.rstrip('\n') + '\n' + section
     else:
-        lines = content.split('\n')
-        insert_idx = len(lines)
-        in_access = False
-        for i, line in enumerate(lines):
-            s = line.strip()
-            if s == '[access.users]':
-                in_access = True
-            elif in_access and s.startswith('[') and s != '[access.users]':
-                insert_idx = i
-                break
-        lines.insert(insert_idx, f'{username} = "{secret}"')
-        content = '\n'.join(lines)
+        # Простой формат: строка под [access.users]
+        if '[access.users]' not in content:
+            content += f'\n[access.users]\n{username} = "{secret}"\n'
+        else:
+            lines = content.split('\n')
+            insert_idx = len(lines)
+            in_access = False
+            for i, line in enumerate(lines):
+                s = line.strip()
+                if s == '[access.users]':
+                    in_access = True
+                elif in_access and s.startswith('[') and s != '[access.users]':
+                    insert_idx = i
+                    break
+            lines.insert(insert_idx, f'{username} = "{secret}"')
+            content = '\n'.join(lines)
+
     return write_config(content)
 
 def remove_user_from_config(username):
     content = read_config()
     if content is None:
         return False, 'Не удалось прочитать конфиг'
-    new = re.sub(rf'^\s*{re.escape(username)}\s*=.*\n?', '', content, flags=re.MULTILINE)
-    if new == content:
+    original = content
+
+    # 1. Простой формат: username = "secret"
+    content = re.sub(
+        rf'^\s*{re.escape(username)}\s*=.*\n?', '',
+        content, flags=re.MULTILINE
+    )
+    # 2. Расширенный формат: [access.users.username] ... до следующей секции
+    #    Удаляем всё от заголовка секции до следующего [ или конца файла
+    content = re.sub(
+        rf'\n\[access\.users\.{re.escape(username)}\][^\[]*',
+        '\n', content, flags=re.DOTALL
+    )
+
+    if content == original:
         return False, f'Пользователь "{username}" не найден в конфиге'
-    return write_config(new)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# HELPERS — МЕТА (лимиты, хранятся отдельно)
-# ──────────────────────────────────────────────────────────────────────────────
-def read_meta():
-    try:
-        with open(META_FILE) as f:
-            return json.load(f)
-    except:
-        return {}
-
-def write_meta(data):
-    try:
-        with open(META_FILE, 'w') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        return True
-    except:
-        return False
-
-def set_user_meta(username, limits):
-    meta = read_meta()
-    meta[username] = limits
-    write_meta(meta)
-
-def del_user_meta(username):
-    meta = read_meta()
-    meta.pop(username, None)
-    write_meta(meta)
+    return write_config(content)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # HELPERS — СЛУЖБА И API
@@ -174,29 +184,26 @@ def is_hex32(s):
     return bool(re.match(r'^[0-9a-fA-F]{32}$', s))
 
 def get_users_enriched():
-    """Пользователи из API + лимиты из мета-файла"""
+    """Пользователи из API — лимиты берём из нативных полей telemt (из TOML-конфига)"""
     data = telemt_get('/v1/users')
     users = data.get('data', []) if data.get('ok') else []
-    meta  = read_meta()
     for u in users:
-        u['traffic_fmt']  = fmt_bytes(u.get('total_octets', 0))
-        m = meta.get(u['username'], {})
-        # Показываем лимиты: из API если есть, иначе из мета
-        u['lim_conns']    = u.get('max_tcp_conns')    or m.get('max_tcp_conns')
-        u['lim_ips']      = u.get('max_unique_ips')   or m.get('max_unique_ips')
-        u['lim_quota']    = fmt_quota(u.get('data_quota_bytes') or m.get('data_quota_bytes'))
-        u['lim_expire']   = u.get('expiration_rfc3339') or m.get('expiration_rfc3339')
-        # Форматировать дату
+        u['traffic_fmt'] = fmt_bytes(u.get('total_octets', 0))
+        # Лимиты нативно поддерживаются telemt и уже есть в API-ответе
+        u['lim_conns']   = u.get('max_tcp_conns')
+        u['lim_ips']     = u.get('max_unique_ips')
+        u['lim_quota']   = fmt_quota(u.get('data_quota_bytes'))
+        u['lim_expire']  = u.get('expiration_rfc3339')
         if u['lim_expire']:
             try:
                 dt = datetime.fromisoformat(u['lim_expire'].replace('Z', '+00:00'))
-                u['lim_expire_fmt'] = dt.strftime('%d.%m.%Y %H:%M UTC')
+                u['lim_expire_fmt']     = dt.strftime('%d.%m.%Y %H:%M UTC')
                 u['lim_expire_expired'] = dt < datetime.now(timezone.utc)
             except:
-                u['lim_expire_fmt'] = u['lim_expire']
+                u['lim_expire_fmt']     = u['lim_expire']
                 u['lim_expire_expired'] = False
         else:
-            u['lim_expire_fmt']    = None
+            u['lim_expire_fmt']     = None
             u['lim_expire_expired'] = False
     total_conn    = sum(u.get('current_connections', 0) for u in users)
     total_ips     = sum(u.get('active_unique_ips', 0) for u in users)
@@ -258,11 +265,7 @@ def api_user_add():
     if not is_hex32(secret):
         return jsonify({'ok': False, 'error': 'Секрет: ровно 32 hex-символа'})
 
-    ok, err = add_user_to_config(username, secret)
-    if not ok:
-        return jsonify({'ok': False, 'error': err})
-
-    # Сохраняем лимиты в мета-файл
+    # Парсим лимиты для записи в TOML-конфиг
     limits = {}
     if d.get('max_tcp_conns'):
         try: limits['max_tcp_conns'] = int(d['max_tcp_conns'])
@@ -276,11 +279,15 @@ def api_user_add():
     if d.get('expiration'):
         try:
             datetime.fromisoformat(d['expiration'])
-            limits['expiration_rfc3339'] = d['expiration'] + ':00+00:00' \
-                if len(d['expiration']) == 16 else d['expiration']
+            limits['expiration_rfc3339'] = (
+                d['expiration'] + ':00+00:00' if len(d['expiration']) == 16
+                else d['expiration']
+            )
         except: pass
-    if limits:
-        set_user_meta(username, limits)
+
+    ok, err = add_user_to_config(username, secret, limits or None)
+    if not ok:
+        return jsonify({'ok': False, 'error': err})
 
     ok2, _ = service_action('restart')
     return jsonify({'ok': True, 'secret': secret, 'restarted': ok2})
@@ -297,7 +304,6 @@ def api_user_delete():
     if not ok:
         return jsonify({'ok': False, 'error': err})
 
-    del_user_meta(username)
     ok2, _ = service_action('restart')
     return jsonify({'ok': True, 'restarted': ok2})
 
@@ -690,7 +696,7 @@ DASH_HTML = _HEAD + """
         <div class="col-12">
           <p class="text-secondary small mb-0">
             <i class="bi bi-info-circle"></i>
-            Ограничения хранятся в дашборде и отображаются как справочная информация.
+            Ограничения записываются в TOML-конфиг telemt и применяются после перезапуска службы.
           </p>
         </div>
       </div>
