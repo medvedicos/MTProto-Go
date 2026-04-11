@@ -13,7 +13,7 @@ Telemt Web Dashboard
   CONFIG_FILE         — путь к конфигу (по умолчанию /etc/telemt/telemt.toml)
 """
 
-import os, re, subprocess, secrets
+import os, re, json, subprocess, secrets
 from functools import wraps
 from datetime import datetime, timezone
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
@@ -22,6 +22,7 @@ import requests as req
 # ──────────────────────────────────────────────────────────────────────────────
 TELEMT_API    = os.environ.get('TELEMT_API',          'http://127.0.0.1:9091')
 CONFIG_FILE   = os.environ.get('CONFIG_FILE',         '/etc/telemt/telemt.toml')
+STATS_FILE    = os.environ.get('STATS_FILE',          '/etc/telemt/telemt-traffic.json')
 DASH_PASSWORD = os.environ.get('DASHBOARD_PASSWORD',  'changeme')
 DASH_PORT     = int(os.environ.get('DASHBOARD_PORT',  8080))
 DASH_HOST     = os.environ.get('DASHBOARD_HOST',      '0.0.0.0')
@@ -59,6 +60,51 @@ def write_config(content):
     except Exception as e:
         return False, str(e)
 
+# ──────────────────────────────────────────────────────────────────────────────
+# HELPERS — НАКОПЛЕННАЯ СТАТИСТИКА ТРАФИКА
+# Telemt хранит счётчики в памяти и сбрасывает их при рестарте.
+# Перед каждым рестартом снимаем снапшот и накапливаем в JSON-файл.
+# ──────────────────────────────────────────────────────────────────────────────
+def _read_stats():
+    try:
+        with open(STATS_FILE) as f:
+            return json.load(f)
+    except:
+        return {}
+
+def _write_stats(data):
+    try:
+        os.makedirs(os.path.dirname(STATS_FILE), exist_ok=True)
+        with open(STATS_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except:
+        pass
+
+def snapshot_traffic():
+    """
+    Считывает текущую статистику из API и добавляет байты к накопленному
+    историческому счётчику в STATS_FILE.
+    Вызывается перед каждым рестартом службы.
+    """
+    try:
+        data = req.get(f'{TELEMT_API}/v1/users', timeout=4).json()
+    except:
+        return
+    if not data.get('ok'):
+        return
+    hist = _read_stats()
+    for u in data.get('data', []):
+        name  = u.get('username', '')
+        octets = u.get('total_octets', 0) or 0
+        if name and octets > 0:
+            hist[name] = hist.get(name, 0) + octets
+    _write_stats(hist)
+
+def get_historical_traffic():
+    """Возвращает dict {username: accumulated_bytes}."""
+    return _read_stats()
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Маппинг поля лимита → секция TOML
 LIMIT_SECTIONS = {
     'max_tcp_conns':    'access.user_max_tcp_conns',
@@ -184,6 +230,9 @@ def set_user_limits(username, limits):
 # HELPERS — СЛУЖБА И API
 # ──────────────────────────────────────────────────────────────────────────────
 def service_action(action):
+    # Перед рестартом/остановкой снимаем снапшот трафика
+    if action in ('restart', 'stop'):
+        snapshot_traffic()
     try:
         r = subprocess.run(['systemctl', action, 'telemt'],
                            capture_output=True, text=True, timeout=15)
@@ -233,11 +282,19 @@ def is_hex32(s):
     return bool(re.match(r'^[0-9a-fA-F]{32}$', s))
 
 def get_users_enriched():
-    """Пользователи из API — лимиты берём из нативных полей telemt (из TOML-конфига)"""
+    """Пользователи из API.
+    Трафик = текущая сессия + накопленный исторический (сохраняется при рестартах).
+    """
     data = telemt_get('/v1/users')
     users = data.get('data', []) if data.get('ok') else []
+    hist  = get_historical_traffic()
     for u in users:
-        u['traffic_fmt'] = fmt_bytes(u.get('total_octets', 0))
+        name    = u.get('username', '')
+        current = u.get('total_octets', 0) or 0
+        # Суммируем с историческим (исторический уже включён в снапшот до рестарта)
+        total   = hist.get(name, 0) + current
+        u['total_octets_all'] = total
+        u['traffic_fmt'] = fmt_bytes(total)
         # Лимиты нативно поддерживаются telemt и уже есть в API-ответе
         u['lim_conns']   = u.get('max_tcp_conns')
         u['lim_ips']     = u.get('max_unique_ips')
@@ -256,7 +313,7 @@ def get_users_enriched():
             u['lim_expire_expired'] = False
     total_conn    = sum(u.get('current_connections', 0) for u in users)
     total_ips     = sum(u.get('active_unique_ips', 0) for u in users)
-    total_traffic = sum(u.get('total_octets', 0) for u in users)
+    total_traffic = sum(u.get('total_octets_all', 0) for u in users)
     return users, total_conn, total_ips, fmt_bytes(total_traffic)
 
 # ──────────────────────────────────────────────────────────────────────────────
