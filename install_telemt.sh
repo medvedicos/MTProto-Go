@@ -1129,9 +1129,10 @@ install_web_dashboard() {
     # Директория
     mkdir -p "$WEB_DIR"
 
-    # Virtualenv: пересоздаём если pip отсутствует (защита от неполного venv)
-    if [[ ! -x "${WEB_DIR}/venv/bin/python3" ]]; then
-        python3 -m venv "${WEB_DIR}/venv" || die "Не удалось создать virtualenv. Попробуйте: apt install python3-venv"
+    # Virtualenv: пересоздаём если не существует или pip недоступен
+    if ! "${WEB_DIR}/venv/bin/python3" -m pip --version &>/dev/null 2>&1; then
+        python3 -m venv --clear "${WEB_DIR}/venv" \
+            || die "Не удалось создать virtualenv. Попробуйте: apt install python3-venv"
         ok "Создан virtualenv: ${WEB_DIR}/venv"
     fi
 
