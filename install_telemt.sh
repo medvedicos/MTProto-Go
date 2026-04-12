@@ -330,7 +330,15 @@ step_censorship() {
     info "TLS-маскировка делает прокси неотличимым от обычного HTTPS-трафика."
     info "TLS-домен используется как SNI-имя хоста для камуфляжа."
 
-    ask "Домен для TLS-маскировки (любой рабочий HTTPS-сайт)" "petrovich.ru" TLS_DOMAIN
+    while true; do
+        ask "Домен для TLS-маскировки (любой рабочий HTTPS-сайт)" "petrovich.ru" TLS_DOMAIN
+        # Убираем любые не-ASCII и недопустимые символы (защита от мусора терминала)
+        TLS_DOMAIN="$(printf '%s' "$TLS_DOMAIN" | tr -cd 'a-zA-Z0-9.-')"
+        if [[ "$TLS_DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$ ]]; then
+            break
+        fi
+        warn "Неверный формат домена. Введите корректный домен, например: google.com"
+    done
 
     ask_yn "Включить маскировку (проксировать неизвестный TLS на реальный сервер)?" "y" MASK_ENABLED
     ask_yn "Включить эмуляцию TLS (имитировать поведение настоящего TLS-сервера)?" "y" TLS_EMULATION
@@ -1103,11 +1111,17 @@ install_web_dashboard() {
 
     # Зависимости
     info "Проверка Python3 и pip..."
-    if ! command -v python3 &>/dev/null; then
-        apt-get install -y python3 python3-pip python3-venv 2>/dev/null || \
-        yum install -y python3 python3-pip 2>/dev/null || \
-        die "Не удалось установить Python3"
+    if command -v apt-get &>/dev/null; then
+        local py_ver
+        py_ver="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")"
+        apt-get install -y python3 python3-pip \
+            ${py_ver:+python${py_ver}-venv} python3-venv 2>/dev/null || true
+    elif command -v yum &>/dev/null; then
+        yum install -y python3 python3-pip 2>/dev/null || true
+    elif command -v dnf &>/dev/null; then
+        dnf install -y python3 python3-pip 2>/dev/null || true
     fi
+    command -v python3 &>/dev/null || die "Не удалось установить Python3"
     ok "Python3: $(python3 --version)"
 
     # Директория
@@ -1115,7 +1129,7 @@ install_web_dashboard() {
 
     # Virtualenv
     if [[ ! -d "${WEB_DIR}/venv" ]]; then
-        python3 -m venv "${WEB_DIR}/venv"
+        python3 -m venv "${WEB_DIR}/venv" || die "Не удалось создать virtualenv. Установите: apt install python3-venv"
         ok "Создан virtualenv: ${WEB_DIR}/venv"
     fi
 
