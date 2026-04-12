@@ -1073,6 +1073,115 @@ EOF
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# ВЕБ-ПАНЕЛЬ
+# ──────────────────────────────────────────────────────────────────────────────
+step_web_dashboard() {
+    step "Веб-панель управления"
+    hr
+    info "Веб-панель позволяет управлять пользователями, лимитами и конфигом через браузер."
+    echo ""
+    ask_yn "Установить веб-панель?" "y" INSTALL_WEB
+
+    if [[ "$INSTALL_WEB" == "false" ]]; then
+        info "Веб-панель не будет установлена."
+        return
+    fi
+
+    ask "Пароль для входа в панель" "changeme" WEB_PASSWORD
+    ask "Порт панели" "8080" WEB_PORT
+}
+
+install_web_dashboard() {
+    [[ "${INSTALL_WEB:-false}" == "false" ]] && return
+
+    step "Установка веб-панели"
+    hr
+
+    local WEB_DIR="/opt/telemt-web"
+    local WEB_SERVICE="/etc/systemd/system/telemt-web.service"
+    local WEB_RAW="https://raw.githubusercontent.com/medvedicos/MTProto-Go/main/telemt-web.py"
+
+    # Зависимости
+    info "Проверка Python3 и pip..."
+    if ! command -v python3 &>/dev/null; then
+        apt-get install -y python3 python3-pip python3-venv 2>/dev/null || \
+        yum install -y python3 python3-pip 2>/dev/null || \
+        die "Не удалось установить Python3"
+    fi
+    ok "Python3: $(python3 --version)"
+
+    # Директория
+    mkdir -p "$WEB_DIR"
+
+    # Virtualenv
+    if [[ ! -d "${WEB_DIR}/venv" ]]; then
+        python3 -m venv "${WEB_DIR}/venv"
+        ok "Создан virtualenv: ${WEB_DIR}/venv"
+    fi
+
+    # Зависимости Python
+    "${WEB_DIR}/venv/bin/pip" install -q --upgrade pip
+    "${WEB_DIR}/venv/bin/pip" install -q flask requests
+    ok "Flask и requests установлены"
+
+    # Скачиваем скрипт
+    if command -v curl &>/dev/null; then
+        curl -fsSL "$WEB_RAW" -o "${WEB_DIR}/telemt-web.py"
+    else
+        wget -qO "${WEB_DIR}/telemt-web.py" "$WEB_RAW"
+    fi
+    ok "Скрипт загружен: ${WEB_DIR}/telemt-web.py"
+
+    # Systemd-служба
+    cat > "$WEB_SERVICE" << EOF
+[Unit]
+Description=Telemt Web Dashboard
+After=network.target telemt.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${WEB_DIR}
+ExecStart=${WEB_DIR}/venv/bin/python3 ${WEB_DIR}/telemt-web.py
+Restart=on-failure
+RestartSec=5
+Environment=DASHBOARD_PASSWORD=${WEB_PASSWORD}
+Environment=DASHBOARD_PORT=${WEB_PORT}
+Environment=DASHBOARD_HOST=0.0.0.0
+Environment=CONFIG_FILE=${CONFIG_FILE}
+Environment=TELEMT_API=http://127.0.0.1:9091
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable telemt-web
+    systemctl start telemt-web
+    sleep 1
+
+    if systemctl is-active --quiet telemt-web; then
+        ok "Веб-панель запущена"
+    else
+        warn "Не удалось запустить веб-панель. Проверьте:"
+        warn "  journalctl -u telemt-web -n 30 --no-pager"
+    fi
+
+    # Определяем внешний IP
+    local server_ip
+    server_ip="$(curl -fsSL --connect-timeout 5 https://api.ipify.org 2>/dev/null || echo "<IP_СЕРВЕРА>")"
+
+    echo ""
+    echo -e "  ${GRN}${BOLD}Веб-панель доступна:${RST}"
+    echo -e "  ${CYN}  http://${server_ip}:${WEB_PORT}${RST}"
+    echo -e "  ${WHT}  Пароль: ${WEB_PASSWORD}${RST}"
+    echo ""
+    warn "Панель работает по HTTP (не HTTPS). Не открывайте порт ${WEB_PORT} публично без firewall!"
+    info "Рекомендуется: nginx reverse proxy + SSL, или доступ только через SSH-туннель."
+    echo ""
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
 # ВЫВОД ССЫЛОК ДЛЯ ПОДКЛЮЧЕНИЯ
 # ──────────────────────────────────────────────────────────────────────────────
 print_links() {
@@ -1203,6 +1312,7 @@ main() {
     step_timeouts
     step_advanced
     step_service
+    step_web_dashboard
     review
 
     echo ""
@@ -1226,6 +1336,7 @@ main() {
         install_docker
     fi
 
+    install_web_dashboard
     print_links
 
     echo -e "\n  ${GRN}${BOLD}Установка завершена!${RST}\n"
