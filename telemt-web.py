@@ -996,42 +996,42 @@ DASH_HTML = _HEAD + """
 
   <!-- Ссылки -->
   <div class="row g-1 mt-1">
-    {% if u.links.tls %}
+    {% for link in u.links.tls %}
     <div class="col-12">
       <div class="d-flex align-items-center gap-1">
         <span class="badge bg-info text-dark fw-bold" style="min-width:58px;font-size:.7rem">TLS</span>
-        <div class="link-box flex-grow-1 text-info">{{ u.links.tls[0] }}</div>
-        <button class="btn btn-sm btn-outline-info px-2" onclick="copyText('{{ u.links.tls[0] }}')"
+        <div class="link-box flex-grow-1 text-info">{{ link }}</div>
+        <button class="btn btn-sm btn-outline-info px-2" onclick="copyText('{{ link }}')"
                 title="Копировать"><i class="bi bi-clipboard"></i></button>
-        <button class="btn btn-sm btn-outline-secondary px-2" onclick="showQR('{{ u.links.tls[0] }}')"
+        <button class="btn btn-sm btn-outline-secondary px-2" onclick="showQR('{{ link }}')"
                 title="QR-код"><i class="bi bi-qr-code"></i></button>
       </div>
     </div>
-    {% endif %}
-    {% if u.links.secure %}
+    {% endfor %}
+    {% for link in u.links.secure %}
     <div class="col-12">
       <div class="d-flex align-items-center gap-1">
         <span class="badge bg-warning text-dark fw-bold" style="min-width:58px;font-size:.7rem">Secure</span>
-        <div class="link-box flex-grow-1 text-warning">{{ u.links.secure[0] }}</div>
-        <button class="btn btn-sm btn-outline-warning px-2" onclick="copyText('{{ u.links.secure[0] }}')"
+        <div class="link-box flex-grow-1 text-warning">{{ link }}</div>
+        <button class="btn btn-sm btn-outline-warning px-2" onclick="copyText('{{ link }}')"
                 title="Копировать"><i class="bi bi-clipboard"></i></button>
-        <button class="btn btn-sm btn-outline-secondary px-2" onclick="showQR('{{ u.links.secure[0] }}')"
+        <button class="btn btn-sm btn-outline-secondary px-2" onclick="showQR('{{ link }}')"
                 title="QR-код"><i class="bi bi-qr-code"></i></button>
       </div>
     </div>
-    {% endif %}
-    {% if u.links.classic %}
+    {% endfor %}
+    {% for link in u.links.classic %}
     <div class="col-12">
       <div class="d-flex align-items-center gap-1">
         <span class="badge bg-secondary fw-bold" style="min-width:58px;font-size:.7rem">Classic</span>
-        <div class="link-box flex-grow-1 text-secondary">{{ u.links.classic[0] }}</div>
-        <button class="btn btn-sm btn-outline-secondary px-2" onclick="copyText('{{ u.links.classic[0] }}')"
+        <div class="link-box flex-grow-1 text-secondary">{{ link }}</div>
+        <button class="btn btn-sm btn-outline-secondary px-2" onclick="copyText('{{ link }}')"
                 title="Копировать"><i class="bi bi-clipboard"></i></button>
-        <button class="btn btn-sm btn-outline-secondary px-2" onclick="showQR('{{ u.links.classic[0] }}')"
+        <button class="btn btn-sm btn-outline-secondary px-2" onclick="showQR('{{ link }}')"
                 title="QR-код"><i class="bi bi-qr-code"></i></button>
       </div>
     </div>
-    {% endif %}
+    {% endfor %}
   </div>
 </div>
 {% else %}
