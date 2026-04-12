@@ -1016,7 +1016,28 @@ install_docker() {
     step "Настройка Docker-развёртывания"
     hr
 
-    command -v docker &>/dev/null || die "Docker не установлен. Сначала установите Docker: https://docs.docker.com/engine/install/"
+    if ! command -v docker &>/dev/null; then
+        warn "Docker не найден."
+        ask_yn "Установить Docker автоматически?" "y" INSTALL_DOCKER_AUTO
+        if [[ "$INSTALL_DOCKER_AUTO" == "true" ]]; then
+            info "Устанавливаем Docker через официальный скрипт..."
+            if command -v curl &>/dev/null; then
+                curl -fsSL https://get.docker.com | sh
+            elif command -v wget &>/dev/null; then
+                wget -qO- https://get.docker.com | sh
+            else
+                die "Требуется curl или wget для установки Docker"
+            fi
+            # Запустить и включить службу
+            systemctl enable --now docker 2>/dev/null || true
+            if ! command -v docker &>/dev/null; then
+                die "Не удалось установить Docker. Установите вручную: https://docs.docker.com/engine/install/"
+            fi
+            ok "Docker установлен: $(docker --version)"
+        else
+            die "Docker не установлен. Установите вручную: https://docs.docker.com/engine/install/"
+        fi
+    fi
 
     mkdir -p "${DOCKER_DIR}"
     generate_config
